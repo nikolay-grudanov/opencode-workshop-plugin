@@ -41,10 +41,11 @@
 - [x] F-002.5: write `.github/workflows/smoke.yml` (syntax check stage) — **v0.1.0-kolya.5**
 - [x] F-002.5: write `scripts/smoke-test.sh` (the A/B test we did today, scripted) — **v0.1.0-kolya.5**
 - [x] F-002.5: smoke test on local — **PASS** (F-001 fix verified, Workshop run status=OK, span_count=4, tool_calls=2 errors=0). Bump to v0.1.0-kolya.5.
-- [ ] F-002.1: prettier reformat `dist/index.js` (preview only — git diff before commit)
-- [ ] F-002.1: add section markers at hook entry points (grep-verifiable)
-- [ ] F-002.1: commit reformat (no behavior change)
-- [ ] Push all F-002 commits to GitHub (Kolya's explicit go-ahead)
+- [x] F-002.1: prettier reformat `dist/index.js` and `dist/index.cjs` via `bunx prettier --parser meriyah --print-width 200` — **v0.1.0-kolya.6**
+- [x] F-002.1: re-apply all 6 KOLYA PATCHes (F-001 + 2× F-002.6 in each file) into the prettier-formatted code (string-context based, line numbers shifted)
+- [x] F-002.1: add 4 `// === SECTION: hook: <name> ===` markers per file (chat.message, tool.execute.after, experimental.session.compacting, experimental.chat.system.transform)
+- [x] F-002.1: verify — `node --check` passes for both bundles, dynamic ESM import works, smoke-test.sh still PASSES
+- [ ] Push F-002.1 to GitHub (waiting for Kolya's explicit 'коммить' + 'push' per Miko-no-auto-commit rule)
 
 ---
 

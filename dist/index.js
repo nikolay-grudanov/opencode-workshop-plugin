@@ -1,6 +1,11 @@
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-}) : x)(function(x) {
+var __require = /* @__PURE__ */ ((x) =>
+  typeof require !== "undefined"
+    ? require
+    : typeof Proxy !== "undefined"
+      ? new Proxy(x, {
+          get: (a, b) => (typeof require !== "undefined" ? require : a)[b],
+        })
+      : x)(function (x) {
   if (typeof require !== "undefined") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + x + '" is not supported');
 });
@@ -39,8 +44,8 @@ function base64Encode(bytes) {
     const c2 = i < binary.length ? binary.charCodeAt(i++) & 255 : NaN;
     const c3 = i < binary.length ? binary.charCodeAt(i++) & 255 : NaN;
     const e1 = c1 >> 2;
-    const e2 = (c1 & 3) << 4 | (Number.isNaN(c2) ? 0 : c2 >> 4);
-    const e3 = Number.isNaN(c2) ? 64 : (c2 & 15) << 2 | (Number.isNaN(c3) ? 0 : c3 >> 6);
+    const e2 = ((c1 & 3) << 4) | (Number.isNaN(c2) ? 0 : c2 >> 4);
+    const e3 = Number.isNaN(c2) ? 64 : ((c2 & 15) << 2) | (Number.isNaN(c3) ? 0 : c3 >> 6);
     const e4 = Number.isNaN(c3) ? 64 : c3 & 63;
     out += alphabet.charAt(e1);
     out += alphabet.charAt(e2);
@@ -104,13 +109,13 @@ async function raceWithTimeout(promise, timeoutMs) {
   const settledInTime = await Promise.race([
     promise.then(
       () => true,
-      () => true
+      () => true,
     ),
     new Promise((resolve) => {
       var _a;
       timer = setTimeout(() => resolve(false), Math.max(0, timeoutMs));
       (_a = timer.unref) == null ? void 0 : _a.call(timer);
-    })
+    }),
   ]);
   if (timer) clearTimeout(timer);
   return settledInTime;
@@ -145,9 +150,7 @@ async function withRetry(operation, opName, opts) {
     if (attemptNumber > 1) {
       const delay = getRetryDelayMs(attemptNumber, lastError);
       if (opts.debug) {
-        console.warn(
-          `${prefix} ${opName} retry ${attemptNumber}/${opts.maxAttempts} in ${delay}ms`
-        );
+        console.warn(`${prefix} ${opName} retry ${attemptNumber}/${opts.maxAttempts} in ${delay}ms`);
       }
       if (delay > 0) await wait(delay);
     } else if (opts.debug) {
@@ -159,12 +162,9 @@ async function withRetry(operation, opName, opts) {
       lastError = err;
       if (opts.debug) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.warn(
-          `${prefix} ${opName} attempt ${attemptNumber} failed: ${msg}${attemptNumber === opts.maxAttempts ? " (no more retries)" : ""}`
-        );
+        console.warn(`${prefix} ${opName} attempt ${attemptNumber} failed: ${msg}${attemptNumber === opts.maxAttempts ? " (no more retries)" : ""}`);
       }
-      if (lastError && typeof lastError === "object" && "retryable" in lastError && !lastError.retryable)
-        break;
+      if (lastError && typeof lastError === "object" && "retryable" in lastError && !lastError.retryable) break;
       if (attemptNumber === opts.maxAttempts) break;
     }
   }
@@ -176,22 +176,20 @@ async function postJson(url, body, headers, opts) {
   const timeoutMs = (_a = opts.timeoutMs) != null ? _a : DEFAULT_REQUEST_TIMEOUT_MS;
   await withRetry(
     async () => {
-      const resp = await runWithTracingSuppressed(
-        () => fetch(url, {
+      const resp = await runWithTracingSuppressed(() =>
+        fetch(url, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...headers
+            ...headers,
           },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(timeoutMs)
-        })
+          signal: AbortSignal.timeout(timeoutMs),
+        }),
       );
       if (!resp.ok) {
         const text = await resp.text().catch(() => "");
-        const err = new Error(
-          `HTTP ${resp.status} ${resp.statusText}${text ? `: ${text}` : ""}`
-        );
+        const err = new Error(`HTTP ${resp.status} ${resp.statusText}${text ? `: ${text}` : ""}`);
         const retryAfterMs = parseRetryAfter(resp.headers);
         if (typeof retryAfterMs === "number") err.retryAfterMs = retryAfterMs;
         err.retryable = resp.status === 429 || resp.status >= 500;
@@ -199,7 +197,7 @@ async function postJson(url, body, headers, opts) {
       }
     },
     opName,
-    opts
+    opts,
   );
 }
 var DEFAULT_MAX_TEXT_FIELD_CHARS = 1e6;
@@ -226,7 +224,7 @@ function capText(value, limit) {
 var SpanStatusCode = {
   UNSET: 0,
   OK: 1,
-  ERROR: 2
+  ERROR: 2,
 };
 function createSpanIds(parent) {
   const traceId = parent ? parent.traceIdB64 : base64Encode(randomBytes(16));
@@ -234,7 +232,7 @@ function createSpanIds(parent) {
   return {
     traceIdB64: traceId,
     spanIdB64: spanId,
-    parentSpanIdB64: parent ? parent.spanIdB64 : void 0
+    parentSpanIdB64: parent ? parent.spanIdB64 : void 0,
   };
 }
 function nowUnixNanoString() {
@@ -256,7 +254,7 @@ function buildOtlpSpan(args) {
     spanId: args.ids.spanIdB64,
     name: args.name,
     startTimeUnixNano: args.startTimeUnixNano,
-    endTimeUnixNano: args.endTimeUnixNano
+    endTimeUnixNano: args.endTimeUnixNano,
   };
   if (args.ids.parentSpanIdB64) span.parentSpanId = args.ids.parentSpanIdB64;
   if (attrs.length) span.attributes = attrs;
@@ -268,16 +266,16 @@ function buildExportTraceServiceRequest(spans, serviceName = "raindrop.core", se
     resourceSpans: [
       {
         resource: {
-          attributes: [{ key: "service.name", value: { stringValue: serviceName } }]
+          attributes: [{ key: "service.name", value: { stringValue: serviceName } }],
         },
         scopeSpans: [
           {
             scope: { name: serviceName, version: serviceVersion },
-            spans
-          }
-        ]
-      }
-    ]
+            spans,
+          },
+        ],
+      },
+    ],
   };
 }
 var LOCAL_DEBUGGER_ENV_VAR = "RAINDROP_LOCAL_DEBUGGER";
@@ -290,8 +288,7 @@ function readEnvVar(name) {
     if (env && typeof env[name] === "string" && env[name].length > 0) {
       return env[name];
     }
-  } catch (e) {
-  }
+  } catch (e) {}
   return void 0;
 }
 function readWorkshopEnv() {
@@ -318,8 +315,7 @@ function readRuntimeHostname() {
     if (loc && typeof loc.hostname === "string" && loc.hostname.length > 0) {
       return loc.hostname;
     }
-  } catch (e) {
-  }
+  } catch (e) {}
   return void 0;
 }
 function shouldAutoEnableLocalWorkshop() {
@@ -346,12 +342,16 @@ function mirrorTraceExportToLocalDebugger(body, options = {}) {
   var _a;
   const baseUrl = resolveLocalDebuggerBaseUrl(options.baseUrl);
   if (!baseUrl) return;
-  void postJson(`${baseUrl}traces`, body, {}, {
-    maxAttempts: 1,
-    debug: (_a = options.debug) != null ? _a : false,
-    sdkName: options.sdkName
-  }).catch(() => {
-  });
+  void postJson(
+    `${baseUrl}traces`,
+    body,
+    {},
+    {
+      maxAttempts: 1,
+      debug: (_a = options.debug) != null ? _a : false,
+      sdkName: options.sdkName,
+    },
+  ).catch(() => {});
 }
 function mirrorPartialEventToLocalDebugger(event, options = {}) {
   var _a;
@@ -361,9 +361,8 @@ function mirrorPartialEventToLocalDebugger(event, options = {}) {
   void postJson(`${baseUrl}events/track_partial`, event, headers, {
     maxAttempts: 1,
     debug: (_a = options.debug) != null ? _a : false,
-    sdkName: options.sdkName
-  }).catch(() => {
-  });
+    sdkName: options.sdkName,
+  }).catch(() => {});
 }
 var PROJECT_ID_HEADER = "X-Raindrop-Project-Id";
 var PROJECT_ID_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -375,9 +374,7 @@ function normalizeProjectId(raw, opts) {
   const trimmed = raw.trim();
   if (!trimmed) return void 0;
   if (!isValidProjectIdSlug(trimmed) && opts.debug) {
-    console.warn(
-      `${opts.prefix} projectId "${trimmed}" does not match slug ${PROJECT_ID_SLUG_PATTERN.source}; sending anyway \u2014 backend may reject with HTTP 400`
-    );
+    console.warn(`${opts.prefix} projectId "${trimmed}" does not match slug ${PROJECT_ID_SLUG_PATTERN.source}; sending anyway \u2014 backend may reject with HTTP 400`);
   }
   return trimmed;
 }
@@ -390,10 +387,10 @@ function mergePatches(target, source) {
   var _a, _b, _c, _d;
   const out = { ...target, ...source };
   if (target.properties || source.properties) {
-    out.properties = { ...(_a = target.properties) != null ? _a : {}, ...(_b = source.properties) != null ? _b : {} };
+    out.properties = { ...((_a = target.properties) != null ? _a : {}), ...((_b = source.properties) != null ? _b : {}) };
   }
   if (target.attachments || source.attachments) {
-    out.attachments = [...(_c = target.attachments) != null ? _c : [], ...(_d = source.attachments) != null ? _d : []];
+    out.attachments = [...((_c = target.attachments) != null ? _c : []), ...((_d = source.attachments) != null ? _d : [])];
   }
   return out;
 }
@@ -420,18 +417,18 @@ var EventShipper = class {
     }
     this.projectId = normalizeProjectId(opts.projectId, {
       debug: this.debug,
-      prefix: this.prefix
+      prefix: this.prefix,
     });
     const isNode = typeof process !== "undefined" && typeof process.version === "string";
     this.context = {
       library: {
         name: (_g = opts.libraryName) != null ? _g : "@raindrop-ai/core",
-        version: (_h = opts.libraryVersion) != null ? _h : "0.0.0"
+        version: (_h = opts.libraryVersion) != null ? _h : "0.0.0",
       },
       metadata: {
         jsRuntime: isNode ? "node" : "web",
-        ...isNode ? { nodeVersion: process.version } : {}
-      }
+        ...(isNode ? { nodeVersion: process.version } : {}),
+      },
     };
   }
   isDebugEnabled() {
@@ -465,7 +462,7 @@ var EventShipper = class {
         maxAttempts: 1,
         debug: this.debug,
         sdkName: this.sdkName,
-        timeoutMs: Math.min(DEFAULT_REQUEST_TIMEOUT_MS, remainingMs)
+        timeoutMs: Math.min(DEFAULT_REQUEST_TIMEOUT_MS, remainingMs),
       };
     }
     if (this.hasShutdown) {
@@ -473,7 +470,7 @@ var EventShipper = class {
         maxAttempts: 1,
         debug: this.debug,
         sdkName: this.sdkName,
-        timeoutMs: POST_SHUTDOWN_TIMEOUT_MS
+        timeoutMs: POST_SHUTDOWN_TIMEOUT_MS,
       };
     }
     return { maxAttempts: 3, debug: this.debug, sdkName: this.sdkName };
@@ -498,7 +495,7 @@ var EventShipper = class {
         hasInput: typeof patch.input === "string" && patch.input.length > 0,
         hasOutput: typeof patch.output === "string" && patch.output.length > 0,
         attachments: (_b = (_a = patch.attachments) == null ? void 0 : _a.length) != null ? _b : 0,
-        isPending: patch.isPending
+        isPending: patch.isPending,
       });
     }
     const sticky = (_c = this.sticky.get(eventId)) != null ? _c : {};
@@ -510,7 +507,7 @@ var EventShipper = class {
       userId: (_h = merged.userId) != null ? _h : sticky.userId,
       convoId: (_i = merged.convoId) != null ? _i : sticky.convoId,
       eventName: (_j = merged.eventName) != null ? _j : sticky.eventName,
-      isPending: (_k = merged.isPending) != null ? _k : sticky.isPending
+      isPending: (_k = merged.isPending) != null ? _k : sticky.isPending,
     });
     const t = this.timers.get(eventId);
     if (t) clearTimeout(t);
@@ -519,8 +516,7 @@ var EventShipper = class {
       return;
     }
     const timeout = setTimeout(() => {
-      void this.flushOne(eventId).catch(() => {
-      });
+      void this.flushOne(eventId).catch(() => {});
     }, this.partialFlushMs);
     this.timers.set(eventId, timeout);
   }
@@ -531,8 +527,7 @@ var EventShipper = class {
     if (!this.enabled) return;
     const ids = [...this.buffers.keys()];
     await Promise.all(ids.map((id) => this.flushOne(id)));
-    await Promise.all([...this.inFlight].map((p) => p.catch(() => {
-    })));
+    await Promise.all([...this.inFlight].map((p) => p.catch(() => {})));
   }
   async shutdown() {
     this.hasShutdown = true;
@@ -558,11 +553,11 @@ var EventShipper = class {
         sentiment: signal.sentiment,
         attachment_id: signal.attachmentId,
         properties: {
-          ...(_b = signal.properties) != null ? _b : {},
-          ...signal.comment ? { comment: signal.comment } : {},
-          ...signal.after ? { after: signal.after } : {}
-        }
-      }
+          ...((_b = signal.properties) != null ? _b : {}),
+          ...(signal.comment ? { comment: signal.comment } : {}),
+          ...(signal.after ? { after: signal.after } : {}),
+        },
+      },
     ];
     if (!this.writeKey) return;
     const url = `${this.baseUrl}signals/track`;
@@ -575,30 +570,29 @@ var EventShipper = class {
       await postJson(url, body, this.requestHeaders(), opts);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      rateLimitedLog(
-        `${this.prefix}.send_signal_failed`,
-        () => console.warn(`${this.prefix} failed to send signal (dropping): ${msg}`)
-      );
+      rateLimitedLog(`${this.prefix}.send_signal_failed`, () => console.warn(`${this.prefix} failed to send signal (dropping): ${msg}`));
     }
   }
   async identify(users) {
     if (!this.enabled) return;
     const list = Array.isArray(users) ? users : [users];
-    const body = list.filter((user) => {
-      if (!(user == null ? void 0 : user.userId) || !user.userId.trim()) {
-        if (this.debug) {
-          console.warn(`${this.prefix} skipping identify: missing userId`);
+    const body = list
+      .filter((user) => {
+        if (!(user == null ? void 0 : user.userId) || !user.userId.trim()) {
+          if (this.debug) {
+            console.warn(`${this.prefix} skipping identify: missing userId`);
+          }
+          return false;
         }
-        return false;
-      }
-      return true;
-    }).map((user) => {
-      var _a;
-      return {
-        user_id: user.userId,
-        traits: (_a = user.traits) != null ? _a : {}
-      };
-    });
+        return true;
+      })
+      .map((user) => {
+        var _a;
+        return {
+          user_id: user.userId,
+          traits: (_a = user.traits) != null ? _a : {},
+        };
+      });
     if (!this.writeKey) return;
     if (body.length === 0) return;
     const url = `${this.baseUrl}users/identify`;
@@ -611,17 +605,11 @@ var EventShipper = class {
       await postJson(url, body, this.requestHeaders(), opts);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      rateLimitedLog(
-        `${this.prefix}.send_identify_failed`,
-        () => console.warn(`${this.prefix} failed to send identify (dropping): ${msg}`)
-      );
+      rateLimitedLog(`${this.prefix}.send_identify_failed`, () => console.warn(`${this.prefix} failed to send identify (dropping): ${msg}`));
     }
   }
   warnShutdownDrop(what) {
-    rateLimitedLog(
-      `${this.prefix}.shutdown_deadline`,
-      () => console.warn(`${this.prefix} shutdown flush deadline exceeded; dropping ${what}`)
-    );
+    rateLimitedLog(`${this.prefix}.shutdown_deadline`, () => console.warn(`${this.prefix} shutdown flush deadline exceeded; dropping ${what}`));
   }
   async flushOne(eventId) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
@@ -651,20 +639,20 @@ var EventShipper = class {
       event_id: eventId,
       user_id: userId,
       event: eventName,
-      timestamp: (_i = accumulated.timestamp) != null ? _i : (/* @__PURE__ */ new Date()).toISOString(),
+      timestamp: (_i = accumulated.timestamp) != null ? _i : /* @__PURE__ */ new Date().toISOString(),
       ai_data: {
         input: accumulated.input,
         output: accumulated.output,
         model: accumulated.model,
-        convo_id: convoId
+        convo_id: convoId,
       },
       properties: {
         ...restProperties,
-        ...wizardSession ? { "raindrop.wizardSession": wizardSession } : {},
-        $context: this.context
+        ...(wizardSession ? { "raindrop.wizardSession": wizardSession } : {}),
+        $context: this.context,
       },
       attachments: accumulated.attachments,
-      is_pending: isPending
+      is_pending: isPending,
     };
     const url = `${this.baseUrl}events/track_partial`;
     if (this.debug) {
@@ -677,13 +665,19 @@ var EventShipper = class {
         inputPreview: typeof accumulated.input === "string" ? accumulated.input.slice(0, 120) : void 0,
         outputPreview: typeof accumulated.output === "string" ? accumulated.output.slice(0, 120) : void 0,
         attachments: (_k = (_j = accumulated.attachments) == null ? void 0 : _j.length) != null ? _k : 0,
-        attachmentKinds: (_m = (_l = accumulated.attachments) == null ? void 0 : _l.map((a) => ({
-          type: a.type,
-          role: a.role,
-          name: a.name,
-          valuePreview: a.value.slice(0, 60)
-        }))) != null ? _m : [],
-        endpoint: url
+        attachmentKinds:
+          (_m =
+            (_l = accumulated.attachments) == null
+              ? void 0
+              : _l.map((a) => ({
+                  type: a.type,
+                  role: a.role,
+                  name: a.name,
+                  valuePreview: a.value.slice(0, 60),
+                }))) != null
+            ? _m
+            : [],
+        endpoint: url,
       });
     }
     if (this.localDebuggerUrl) {
@@ -691,7 +685,7 @@ var EventShipper = class {
         baseUrl: this.localDebuggerUrl,
         writeKey: this.writeKey,
         debug: this.debug,
-        sdkName: this.sdkName
+        sdkName: this.sdkName,
       });
     }
     if (!this.writeKey) {
@@ -714,10 +708,7 @@ var EventShipper = class {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        rateLimitedLog(
-          `${this.prefix}.send_track_partial_failed`,
-          () => console.warn(`${this.prefix} failed to send track_partial (dropping): ${msg}`)
-        );
+        rateLimitedLog(`${this.prefix}.send_track_partial_failed`, () => console.warn(`${this.prefix} failed to send track_partial (dropping): ${msg}`));
       }
     } finally {
       this.inFlight.delete(p);
@@ -742,7 +733,7 @@ var DEFAULT_SECRET_KEY_NAMES = [
   "bearertoken",
   "authorization",
   "password",
-  "passphrase"
+  "passphrase",
 ];
 var REDACTED_PLACEHOLDER = "[REDACTED]";
 function normalizeKeyName(name) {
@@ -777,10 +768,7 @@ function buildSecretSet(names) {
   for (const name of names) set.add(normalizeKeyName(name));
   return set;
 }
-var DEFAULT_REDACT_ATTRIBUTE_KEYS = [
-  "ai.request.providerOptions",
-  "ai.response.providerMetadata"
-];
+var DEFAULT_REDACT_ATTRIBUTE_KEYS = ["ai.request.providerOptions", "ai.response.providerMetadata"];
 function defaultTransformSpan(span) {
   const attrs = span.attributes;
   if (!attrs || attrs.length === 0) return span;
@@ -825,8 +813,7 @@ function applyOtelSpanAttributeLimit(limit) {
     if (Number.isFinite(parsed) && parsed > 0) {
       return Math.min(limit, parsed);
     }
-  } catch (e) {
-  }
+  } catch (e) {}
   return limit;
 }
 var TraceShipper = class {
@@ -853,7 +840,7 @@ var TraceShipper = class {
     }
     this.projectId = normalizeProjectId(opts.projectId, {
       debug: this.debug,
-      prefix: this.prefix
+      prefix: this.prefix,
     });
     this.transformSpanHook = opts.transformSpan;
     this.disableDefaultRedaction = opts.disableDefaultRedaction === true;
@@ -872,9 +859,7 @@ var TraceShipper = class {
    */
   capSpanAttributes(span) {
     var _a;
-    const maxChars = applyOtelSpanAttributeLimit(
-      resolveMaxTextFieldChars(this.maxTextFieldCharsOpt)
-    );
+    const maxChars = applyOtelSpanAttributeLimit(resolveMaxTextFieldChars(this.maxTextFieldCharsOpt));
     const attrs = span.attributes;
     if (!attrs || attrs.length === 0) return span;
     let nextAttrs;
@@ -885,7 +870,7 @@ var TraceShipper = class {
       if (!nextAttrs) nextAttrs = attrs.slice();
       nextAttrs[i] = {
         key: attr.key,
-        value: { ...attr.value, stringValue: capText(value, maxChars) }
+        value: { ...attr.value, stringValue: capText(value, maxChars) },
       };
     }
     if (!nextAttrs) return span;
@@ -938,10 +923,7 @@ var TraceShipper = class {
     var _a, _b;
     const ids = createSpanIds(args.parent);
     const started = (_a = args.startTimeUnixNano) != null ? _a : nowUnixNanoString();
-    const attrs = [
-      attrString("ai.telemetry.metadata.raindrop.eventId", args.eventId),
-      attrString("ai.operationId", args.operationId)
-    ];
+    const attrs = [attrString("ai.telemetry.metadata.raindrop.eventId", args.eventId), attrString("ai.operationId", args.operationId)];
     if ((_b = args.attributes) == null ? void 0 : _b.length) attrs.push(...args.attributes);
     const span = { ids, name: args.name, startTimeUnixNano: started, attributes: attrs };
     this.mirrorToLocalDebugger(
@@ -952,8 +934,8 @@ var TraceShipper = class {
         endTimeUnixNano: span.startTimeUnixNano,
         // placeholder — will be updated on endSpan
         attributes: span.attributes,
-        status: { code: SpanStatusCode.UNSET }
-      })
+        status: { code: SpanStatusCode.UNSET },
+      }),
     );
     return span;
   }
@@ -965,7 +947,7 @@ var TraceShipper = class {
     mirrorTraceExportToLocalDebugger(body, {
       baseUrl: this.localDebuggerUrl,
       debug: false,
-      sdkName: this.sdkName
+      sdkName: this.sdkName,
     });
   }
   endSpan(span, extra) {
@@ -986,7 +968,7 @@ var TraceShipper = class {
       startTimeUnixNano: span.startTimeUnixNano,
       endTimeUnixNano: span.endTimeUnixNano,
       attributes: span.attributes,
-      status
+      status,
     });
     this.enqueue(otlp);
     this.mirrorToLocalDebugger(otlp);
@@ -994,9 +976,7 @@ var TraceShipper = class {
   createSpan(args) {
     var _a;
     const ids = createSpanIds(args.parent);
-    const attrs = [
-      attrString("ai.telemetry.metadata.raindrop.eventId", args.eventId)
-    ];
+    const attrs = [attrString("ai.telemetry.metadata.raindrop.eventId", args.eventId)];
     if ((_a = args.attributes) == null ? void 0 : _a.length) attrs.push(...args.attributes);
     const otlp = buildOtlpSpan({
       ids,
@@ -1004,7 +984,7 @@ var TraceShipper = class {
       startTimeUnixNano: args.startTimeUnixNano,
       endTimeUnixNano: args.endTimeUnixNano,
       attributes: attrs,
-      status: args.status
+      status: args.status,
     });
     this.enqueue(otlp);
     this.mirrorToLocalDebugger(otlp);
@@ -1012,12 +992,8 @@ var TraceShipper = class {
   enqueue(span) {
     if (!this.enabled) return;
     if (this.debugSpans) {
-      const short = (s) => s ? s.slice(-8) : "none";
-      console.log(
-        `${this.prefix}[span] name=${span.name} trace=${short(span.traceId)} span=${short(span.spanId)} parent=${short(
-          span.parentSpanId
-        )}`
-      );
+      const short = (s) => (s ? s.slice(-8) : "none");
+      console.log(`${this.prefix}[span] name=${span.name} trace=${short(span.traceId)} span=${short(span.spanId)} parent=${short(span.parentSpanId)}`);
     }
     const redacted = this.redactSpan(span);
     if (redacted === null) return;
@@ -1026,15 +1002,13 @@ var TraceShipper = class {
     }
     this.queue.push(redacted);
     if (this.queue.length >= this.maxBatchSize) {
-      void this.flush().catch(() => {
-      });
+      void this.flush().catch(() => {});
       return;
     }
     if (!this.timer) {
       this.timer = setTimeout(() => {
         this.timer = void 0;
-        void this.flush().catch(() => {
-        });
+        void this.flush().catch(() => {});
       }, this.flushIntervalMs);
     }
   }
@@ -1049,12 +1023,7 @@ var TraceShipper = class {
       if (!this.writeKey) continue;
       const opts = this.requestOpts();
       if (!opts) {
-        rateLimitedLog(
-          `${this.prefix}.shutdown_deadline`,
-          () => console.warn(
-            `${this.prefix} shutdown flush deadline exceeded; dropping ${batch.length} spans`
-          )
-        );
+        rateLimitedLog(`${this.prefix}.shutdown_deadline`, () => console.warn(`${this.prefix} shutdown flush deadline exceeded; dropping ${batch.length} spans`));
         continue;
       }
       const body = buildExportTraceServiceRequest(batch, this.serviceName, this.serviceVersion);
@@ -1062,7 +1031,7 @@ var TraceShipper = class {
       if (this.debug) {
         console.log(`${this.prefix} sending traces batch`, {
           spans: batch.length,
-          endpoint: url
+          endpoint: url,
         });
       }
       const p = postJson(url, body, this.requestHeaders(), opts);
@@ -1073,10 +1042,7 @@ var TraceShipper = class {
           if (this.debug) console.log(`${this.prefix} sent ${batch.length} spans`);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          rateLimitedLog(
-            `${this.prefix}.send_spans_failed`,
-            () => console.warn(`${this.prefix} failed to send ${batch.length} spans: ${msg}`)
-          );
+          rateLimitedLog(`${this.prefix}.send_spans_failed`, () => console.warn(`${this.prefix} failed to send ${batch.length} spans: ${msg}`));
         }
       } finally {
         this.inFlight.delete(p);
@@ -1092,7 +1058,7 @@ var TraceShipper = class {
         maxAttempts: 1,
         debug: this.debug,
         sdkName: this.sdkName,
-        timeoutMs: Math.min(DEFAULT_REQUEST_TIMEOUT_MS, remainingMs)
+        timeoutMs: Math.min(DEFAULT_REQUEST_TIMEOUT_MS, remainingMs),
       };
     }
     if (this.hasShutdown) {
@@ -1100,7 +1066,7 @@ var TraceShipper = class {
         maxAttempts: 1,
         debug: this.debug,
         sdkName: this.sdkName,
-        timeoutMs: POST_SHUTDOWN_TIMEOUT_MS
+        timeoutMs: POST_SHUTDOWN_TIMEOUT_MS,
       };
     }
     return { maxAttempts: 3, debug: this.debug, sdkName: this.sdkName };
@@ -1115,15 +1081,11 @@ var TraceShipper = class {
       }
       const drain = async () => {
         await this.flush();
-        await Promise.all([...this.inFlight].map((p) => p.catch(() => {
-        })));
+        await Promise.all([...this.inFlight].map((p) => p.catch(() => {})));
       };
       const settled = await raceWithTimeout(drain(), SHUTDOWN_DEADLINE_MS);
       if (!settled) {
-        rateLimitedLog(
-          `${this.prefix}.shutdown_deadline`,
-          () => console.warn(`${this.prefix} shutdown flush deadline exceeded; abandoning in-flight spans`)
-        );
+        rateLimitedLog(`${this.prefix}.shutdown_deadline`, () => console.warn(`${this.prefix} shutdown flush deadline exceeded; abandoning in-flight spans`));
       }
     } finally {
       this.shutdownDeadlineAt = void 0;
@@ -1134,9 +1096,7 @@ var TraceShipper = class {
 // ../core/dist/index.node.js
 import { AsyncLocalStorage } from "async_hooks";
 globalThis.RAINDROP_ASYNC_LOCAL_STORAGE = AsyncLocalStorage;
-var SUPPRESS_TRACING_KEY = /* @__PURE__ */ Symbol.for(
-  "OpenTelemetry SDK Context Key SUPPRESS_TRACING"
-);
+var SUPPRESS_TRACING_KEY = /* @__PURE__ */ Symbol.for("OpenTelemetry SDK Context Key SUPPRESS_TRACING");
 function findOtelContextManager() {
   var _a;
   for (const sym of Object.getOwnPropertySymbols(globalThis)) {
@@ -1167,10 +1127,7 @@ import { join } from "path";
 function loadConfig(projectDirectory) {
   var _a, _b, _c, _d, _e, _f, _g, _h;
   let merged = {};
-  const configPaths = [
-    join(homedir(), ".config", "opencode", "raindrop.json"),
-    join(projectDirectory, ".opencode", "raindrop.json")
-  ];
+  const configPaths = [join(homedir(), ".config", "opencode", "raindrop.json"), join(projectDirectory, ".opencode", "raindrop.json")];
   for (const configPath of configPaths) {
     try {
       if (existsSync(configPath)) {
@@ -1178,16 +1135,14 @@ function loadConfig(projectDirectory) {
         const parsed = JSON.parse(content);
         merged = { ...merged, ...parsed };
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
   let eventMetadata;
   const envMeta = process.env["RAINDROP_EVENT_METADATA"];
   if (envMeta) {
     try {
       eventMetadata = JSON.parse(envMeta);
-    } catch (e) {
-    }
+    } catch (e) {}
   }
   return {
     writeKey: (_b = (_a = process.env["RAINDROP_WRITE_KEY"]) != null ? _a : merged.write_key) != null ? _b : "",
@@ -1202,7 +1157,7 @@ function loadConfig(projectDirectory) {
     // as "trace_only": true, or via env RAINDROP_TRACE_ONLY=true. Default: false
     // (existing behaviour, writes to stdout).
     traceOnly: process.env["RAINDROP_TRACE_ONLY"] === "true" ? true : (merged.trace_only === true),
-    localWorkshopUrl: resolveLocalWorkshopUrl(merged.local_workshop_url)
+    localWorkshopUrl: resolveLocalWorkshopUrl(merged.local_workshop_url),
   };
 }
 function resolveLocalWorkshopUrl(fileValue) {
@@ -1228,33 +1183,31 @@ var package_default = {
   license: "MIT",
   homepage: "https://www.raindrop.ai/docs/integrations/opencode/",
   bugs: {
-    url: "https://www.raindrop.ai/docs/support/"
+    url: "https://www.raindrop.ai/docs/support/",
   },
   exports: {
     ".": {
       types: "./dist/index.d.ts",
       import: "./dist/index.js",
-      require: "./dist/index.cjs"
-    }
+      require: "./dist/index.cjs",
+    },
   },
   sideEffects: false,
-  files: [
-    "dist/**"
-  ],
+  files: ["dist/**"],
   scripts: {
     build: "tsup",
     dev: "tsup --watch",
     clean: "rm -rf dist",
-    test: "cd tests && pnpm test"
+    test: "cd tests && pnpm test",
   },
   peerDependencies: {
     "@opencode-ai/plugin": ">=1.3.0",
-    "@opencode-ai/sdk": ">=1.3.0"
+    "@opencode-ai/sdk": ">=1.3.0",
   },
   peerDependenciesMeta: {
     "@opencode-ai/sdk": {
-      optional: true
-    }
+      optional: true,
+    },
   },
   devDependencies: {
     "@raindrop-ai/core": "workspace:*",
@@ -1262,27 +1215,20 @@ var package_default = {
     "@opencode-ai/sdk": "^1.3.3",
     "@types/node": "^20.11.17",
     tsup: "^8.4.0",
-    typescript: "^5.3.3"
+    typescript: "^5.3.3",
   },
   tsup: {
-    entry: [
-      "src/index.ts"
-    ],
-    format: [
-      "cjs",
-      "esm"
-    ],
+    entry: ["src/index.ts"],
+    format: ["cjs", "esm"],
     dts: {
-      resolve: true
+      resolve: true,
     },
     clean: true,
-    noExternal: [
-      "@raindrop-ai/core"
-    ]
+    noExternal: ["@raindrop-ai/core"],
   },
   publishConfig: {
-    access: "public"
-  }
+    access: "public",
+  },
 };
 
 // src/package-info.ts
@@ -1298,7 +1244,7 @@ var EventShipper2 = class extends EventShipper {
       sdkName: (_a = opts.sdkName) != null ? _a : "opencode-plugin",
       libraryName: (_b = opts.libraryName) != null ? _b : PLUGIN_NAME,
       libraryVersion: (_c = opts.libraryVersion) != null ? _c : PLUGIN_VERSION,
-      defaultEventName: (_d = opts.defaultEventName) != null ? _d : "opencode_session"
+      defaultEventName: (_d = opts.defaultEventName) != null ? _d : "opencode_session",
     });
   }
 };
@@ -1309,16 +1255,13 @@ var TraceShipper2 = class extends TraceShipper {
       ...opts,
       sdkName: (_a = opts.sdkName) != null ? _a : "opencode-plugin",
       serviceName: (_b = opts.serviceName) != null ? _b : "raindrop.opencode-plugin",
-      serviceVersion: (_c = opts.serviceVersion) != null ? _c : PLUGIN_VERSION
+      serviceVersion: (_c = opts.serviceVersion) != null ? _c : PLUGIN_VERSION,
     });
   }
   enqueue(span) {
     var _a;
     const attrs = (_a = span.attributes) != null ? _a : [];
-    attrs.unshift(
-      { key: "span.id", value: { stringValue: span.spanId } },
-      ...span.parentSpanId ? [{ key: "span.parent.id", value: { stringValue: span.parentSpanId } }] : []
-    );
+    attrs.unshift({ key: "span.id", value: { stringValue: span.spanId } }, ...(span.parentSpanId ? [{ key: "span.parent.id", value: { stringValue: span.parentSpanId } }] : []));
     span.attributes = attrs;
     super.enqueue(span);
   }
@@ -1366,8 +1309,7 @@ function boundedClone2(value, budget, depth) {
   if (typeof withToJson.toJSON === "function") {
     try {
       return boundedClone2(withToJson.toJSON(), budget, depth + 1);
-    } catch (e) {
-    }
+    } catch (e) {}
   }
   if (Array.isArray(value)) {
     const out2 = [];
@@ -1412,7 +1354,7 @@ function createSessionParentMapHelpers({
   mapChildSessionToParent: mapChildSessionToParent2,
   pendingChildSessionsByCallKey: pendingChildSessionsByCallKey2,
   callKey: callKey2,
-  log
+  log,
 }) {
   function applyChildSessionParentToState(childSessionId) {
     const parentInfo = mapChildSessionToParent2.get(childSessionId);
@@ -1438,7 +1380,7 @@ function createSessionParentMapHelpers({
     const parentInfo = {
       parentId,
       parentTaskSpanIds: ctx.ids,
-      eventContext: ctx.eventContext
+      eventContext: ctx.eventContext,
     };
     mapChildSessionToParent2.set(childSessionId, parentInfo);
     applyChildSessionParentToState(childSessionId);
@@ -1476,7 +1418,7 @@ function createSessionParentMapHelpers({
     applyChildSessionParentToState,
     attachChildSessionToParentTask,
     cleanupSessionParentMap,
-    resolvePendingChildrenForCall
+    resolvePendingChildrenForCall,
   };
 }
 
@@ -1502,7 +1444,7 @@ function createSessionState(sessionId) {
     outputParts: /* @__PURE__ */ new Map(),
     reasoningParts: /* @__PURE__ */ new Map(),
     toolSpanStarts: /* @__PURE__ */ new Map(),
-    processedMessages: /* @__PURE__ */ new Set()
+    processedMessages: /* @__PURE__ */ new Set(),
   };
 }
 function callKey(sessionId, callId) {
@@ -1519,14 +1461,11 @@ function endPendingToolSpanWithError(state, callID, tool, toolCallArgs, errorMes
   if (!startInfo) return false;
   state.toolSpanStarts.delete(callID);
   const error = new Error(errorMessage);
-  const endAttrs = [
-    attrString("ai.toolCall.args", toolCallArgs),
-    attrString("error.message", errorMessage)
-  ];
+  const endAttrs = [attrString("ai.toolCall.args", toolCallArgs), attrString("error.message", errorMessage)];
   if (startInfo.liveSpan) {
     traceShipper.endSpan(startInfo.liveSpan, {
       attributes: endAttrs,
-      error
+      error,
     });
   } else {
     const toolSpan = traceShipper.startSpan({
@@ -1534,16 +1473,12 @@ function endPendingToolSpanWithError(state, callID, tool, toolCallArgs, errorMes
       parent: startInfo.parent,
       eventId: startInfo.eventId,
       startTimeUnixNano: startInfo.startTimeUnixNano,
-      attributes: [
-        attrString("ai.operationId", "ai.toolCall"),
-        attrString("ai.toolCall.name", tool),
-        attrString("ai.toolCall.id", callID)
-      ]
+      attributes: [attrString("ai.operationId", "ai.toolCall"), attrString("ai.toolCall.name", tool), attrString("ai.toolCall.id", callID)],
     });
     traceShipper.endSpan(toolSpan, {
       attributes: endAttrs,
       error,
-      endTimeUnixNano: nowUnixNanoString()
+      endTimeUnixNano: nowUnixNanoString(),
     });
   }
   return true;
@@ -1585,19 +1520,14 @@ function createHooks(config, worktree, directory, eventShipper, traceShipper) {
   }
   const hostname = getHostname();
   const os = process.platform;
-  const {
-    applyChildSessionParentToState,
-    attachChildSessionToParentTask,
-    cleanupSessionParentMap,
-    resolvePendingChildrenForCall
-  } = createSessionParentMapHelpers({
+  const { applyChildSessionParentToState, attachChildSessionToParentTask, cleanupSessionParentMap, resolvePendingChildrenForCall } = createSessionParentMapHelpers({
     sessions,
     taskContexts,
     runningTaskCallsBySession,
     mapChildSessionToParent,
     pendingChildSessionsByCallKey,
     callKey,
-    log
+    log,
   });
   return {
     // ------------------------------------------------------------------
@@ -1614,8 +1544,7 @@ function createHooks(config, worktree, directory, eventShipper, traceShipper) {
           throw new Error(`event ${event.type}: missing sessionID in properties`);
         }
         if (event.type === "session.created") {
-          if (info == null || typeof info !== "object")
-            throw new Error("session.created: props.info is required");
+          if (info == null || typeof info !== "object") throw new Error("session.created: props.info is required");
           const parentID = info["parentID"];
           let state = sessions.get(sessionID);
           if (!state) {
@@ -1630,15 +1559,12 @@ function createHooks(config, worktree, directory, eventShipper, traceShipper) {
           state.isCompacting = true;
         } else if (event.type === "message.part.updated") {
           const part = props["part"];
-          if (part == null || typeof part !== "object")
-            throw new Error("message.part.updated: props.part is required");
+          if (part == null || typeof part !== "object") throw new Error("message.part.updated: props.part is required");
           const partObj = part;
           const partSessionID = partObj["sessionID"];
           const messageId = partObj["messageID"];
-          if (partSessionID == null || partSessionID === "")
-            throw new Error("message.part.updated: part.sessionID is required");
-          if (messageId == null || messageId === "")
-            throw new Error("message.part.updated: part.messageID is required");
+          if (partSessionID == null || partSessionID === "") throw new Error("message.part.updated: part.sessionID is required");
+          if (messageId == null || messageId === "") throw new Error("message.part.updated: part.messageID is required");
           const state = sessions.get(partSessionID);
           if (!state) return;
           if (partObj["type"] === "text" && typeof partObj["text"] === "string") {
@@ -1647,40 +1573,25 @@ function createHooks(config, worktree, directory, eventShipper, traceShipper) {
             const tool = partObj["tool"];
             const callID = partObj["callID"];
             const partState = partObj["state"];
-            if (callID == null || callID === "")
-              throw new Error("message.part.updated: part.callID is required for tool part");
-            if (partState == null || typeof partState !== "object")
-              throw new Error("message.part.updated: part.state is required for tool part");
+            if (callID == null || callID === "") throw new Error("message.part.updated: part.callID is required for tool part");
+            if (partState == null || typeof partState !== "object") throw new Error("message.part.updated: part.state is required for tool part");
             if (tool === "task") {
               const metadata = partState["metadata"];
               const childSessionId = metadata != null && typeof metadata === "object" ? metadata["sessionId"] : void 0;
               if (childSessionId != null && childSessionId !== "") {
                 mapChildSessionToParent.set(childSessionId, {
-                  parentId: partSessionID
+                  parentId: partSessionID,
                 });
-                attachChildSessionToParentTask(
-                  childSessionId,
-                  partSessionID,
-                  callID,
-                  "part.metadata"
-                );
+                attachChildSessionToParentTask(childSessionId, partSessionID, callID, "part.metadata");
               }
             }
             const toolState = partState;
             if (toolState["status"] === "error") {
               const errorMessage = toolState["error"];
-              if (typeof errorMessage !== "string" || errorMessage === "")
-                throw new Error("message.part.updated: error tool state must have error string");
+              if (typeof errorMessage !== "string" || errorMessage === "") throw new Error("message.part.updated: error tool state must have error string");
               const input = toolState["input"];
               const toolCallArgs = input === void 0 ? void 0 : typeof input === "string" ? capText2(input) : boundedStringify(input);
-              if (endPendingToolSpanWithError(
-                state,
-                callID,
-                tool,
-                toolCallArgs,
-                errorMessage,
-                traceShipper
-              ) && tool === "task") {
+              if (endPendingToolSpanWithError(state, callID, tool, toolCallArgs, errorMessage, traceShipper) && tool === "task") {
                 markTaskCallFinished(partSessionID, callID);
               }
             }
@@ -1689,20 +1600,16 @@ function createHooks(config, worktree, directory, eventShipper, traceShipper) {
           }
         } else if (event.type === "message.updated") {
           const msgInfo = props["info"];
-          if (msgInfo == null || typeof msgInfo !== "object")
-            throw new Error("message.updated: props.info is required");
+          if (msgInfo == null || typeof msgInfo !== "object") throw new Error("message.updated: props.info is required");
           const info2 = msgInfo;
           const role = info2["role"];
           if (role !== "assistant") return;
           const msgSessionID = info2["sessionID"];
           const messageId = info2["id"];
           const time = info2["time"];
-          if (msgSessionID == null || msgSessionID === "")
-            throw new Error("message.updated: info.sessionID is required");
-          if (messageId == null || messageId === "")
-            throw new Error("message.updated: info.id is required");
-          if (time == null || typeof time !== "object")
-            throw new Error("message.updated: info.time is required");
+          if (msgSessionID == null || msgSessionID === "") throw new Error("message.updated: info.sessionID is required");
+          if (messageId == null || messageId === "") throw new Error("message.updated: info.id is required");
+          if (time == null || typeof time !== "object") throw new Error("message.updated: info.time is required");
           const timeObj = time;
           if (timeObj["completed"] == null) return;
           const state = sessions.get(msgSessionID);
@@ -1710,46 +1617,41 @@ function createHooks(config, worktree, directory, eventShipper, traceShipper) {
           if (state.processedMessages.has(messageId)) return;
           state.processedMessages.add(messageId);
           const tokens = info2["tokens"];
-          if (tokens == null || typeof tokens !== "object")
-            throw new Error("message.updated: info.tokens is required");
+          if (tokens == null || typeof tokens !== "object") throw new Error("message.updated: info.tokens is required");
           const tokensObj = tokens;
           const inputTokens = tokensObj["input"];
           const outputTokens = tokensObj["output"];
           const reasoningTokens = tokensObj["reasoning"];
-          if (typeof inputTokens !== "number" || typeof outputTokens !== "number")
-            throw new Error("message.updated: tokens.input and tokens.output must be numbers");
+          if (typeof inputTokens !== "number" || typeof outputTokens !== "number") throw new Error("message.updated: tokens.input and tokens.output must be numbers");
           const providerID = info2["providerID"];
           const modelID = info2["modelID"];
           if (typeof providerID !== "string" || providerID === "" || typeof modelID !== "string" || modelID === "")
-            throw new Error(
-              "message.updated: providerID and modelID are required non-empty strings"
-            );
+            throw new Error("message.updated: providerID and modelID are required non-empty strings");
           const modelName = `${providerID}/${modelID}`;
           const finishReason = info2["finish"];
           const outputText = state.outputParts.get(messageId);
           const reasoningText = state.reasoningParts.get(messageId);
           const isToolCallsCompletion = finishReason === "tool-calls";
           const hasIntermediateReasoning = reasoningText !== void 0 && reasoningText.trim().length > 0;
-          if (outputText === void 0 && !(isToolCallsCompletion && hasIntermediateReasoning))
-            return;
+          if (outputText === void 0 && !(isToolCallsCompletion && hasIntermediateReasoning)) return;
           if (isToolCallsCompletion && !hasIntermediateReasoning) {
             await traceShipper.flush();
             return;
           }
           const msgError = info2["error"];
-          const errorForSpan = msgError ? (() => {
-            var _a2, _b2;
-            const msg = (_b2 = (_a2 = msgError.data) == null ? void 0 : _a2.message) != null ? _b2 : msgError.name;
-            const name = msgError.name;
-            if (msg == null && name == null)
-              throw new Error("message.updated: error object must have name or data.message");
-            return `${msg != null ? msg : name}
+          const errorForSpan = msgError
+            ? (() => {
+                var _a2, _b2;
+                const msg = (_b2 = (_a2 = msgError.data) == null ? void 0 : _a2.message) != null ? _b2 : msgError.name;
+                const name = msgError.name;
+                if (msg == null && name == null) throw new Error("message.updated: error object must have name or data.message");
+                return `${msg != null ? msg : name}
 
 type: ${name != null ? name : "UnknownError"}`;
-          })() : void 0;
+              })()
+            : void 0;
           if (isToolCallsCompletion) {
-            if (reasoningText === void 0)
-              throw new Error("message.updated: reasoningParts missing for tool-call continuation");
+            if (reasoningText === void 0) throw new Error("message.updated: reasoningParts missing for tool-call continuation");
             const llmAttrs = [
               attrString("ai.operationId", "generateText"),
               attrString("ai.response.text", reasoningText),
@@ -1757,23 +1659,20 @@ type: ${name != null ? name : "UnknownError"}`;
               attrString("gen_ai.request.model", modelID),
               attrString("gen_ai.response.model", modelID),
               attrInt("gen_ai.usage.input_tokens", inputTokens),
-              attrInt("gen_ai.usage.output_tokens", outputTokens)
+              attrInt("gen_ai.usage.output_tokens", outputTokens),
             ];
             if (reasoningTokens != null && typeof reasoningTokens === "number" && reasoningTokens > 0) {
               llmAttrs.push(attrInt("gen_ai.usage.reasoning_tokens", reasoningTokens));
             }
             if (state.currentSystemPrompt) {
-              llmAttrs.push(
-                attrString("gen_ai.prompt.0.role", "system"),
-                attrString("gen_ai.prompt.0.content", state.currentSystemPrompt)
-              );
+              llmAttrs.push(attrString("gen_ai.prompt.0.role", "system"), attrString("gen_ai.prompt.0.content", state.currentSystemPrompt));
             }
             const llmParent = state.parentId && state.parentTaskSpanIds ? state.parentTaskSpanIds : state.currentRootSpan.ids;
             const llmSpan = traceShipper.startSpan({
               name: modelName,
               parent: llmParent,
               eventId: state.currentEventId,
-              attributes: llmAttrs
+              attributes: llmAttrs,
             });
             if (typeof timeObj["created"] === "number") {
               llmSpan.startTimeUnixNano = String(Math.floor(timeObj["created"])) + "000000";
@@ -1790,29 +1689,23 @@ type: ${name != null ? name : "UnknownError"}`;
             const llmAttrs = [
               attrString("ai.operationId", "generateText"),
               attrString("ai.prompt", userInput),
-              attrString(
-                "ai.prompt.messages",
-                buildPromptMessages(state.currentSystemPrompt, state.currentInput)
-              ),
+              attrString("ai.prompt.messages", buildPromptMessages(state.currentSystemPrompt, state.currentInput)),
               attrString("ai.response.text", outputText),
               attrString("gen_ai.system", providerID),
               attrString("gen_ai.request.model", modelID),
               attrString("gen_ai.response.model", modelID),
               attrInt("gen_ai.usage.input_tokens", inputTokens),
-              attrInt("gen_ai.usage.output_tokens", outputTokens)
+              attrInt("gen_ai.usage.output_tokens", outputTokens),
             ];
             if (reasoningTokens != null && typeof reasoningTokens === "number" && reasoningTokens > 0) {
               llmAttrs.push(attrInt("gen_ai.usage.reasoning_tokens", reasoningTokens));
             }
             if (state.currentSystemPrompt) {
-              llmAttrs.push(
-                attrString("gen_ai.prompt.0.role", "system"),
-                attrString("gen_ai.prompt.0.content", state.currentSystemPrompt)
-              );
+              llmAttrs.push(attrString("gen_ai.prompt.0.role", "system"), attrString("gen_ai.prompt.0.content", state.currentSystemPrompt));
             }
             if (!state.parentTaskSpanIds) {
               traceShipper.endSpan(rootSpan, {
-                error: "Missing strict parent task for child session"
+                error: "Missing strict parent task for child session",
               });
               state.currentRootSpan = void 0;
               state.currentEventId = void 0;
@@ -1823,18 +1716,15 @@ type: ${name != null ? name : "UnknownError"}`;
               name: modelName,
               parent: state.parentTaskSpanIds,
               eventId: state.currentEventId,
-              attributes: llmAttrs
+              attributes: llmAttrs,
             });
             if (typeof timeObj["created"] === "number") {
               finalLlmSpan.startTimeUnixNano = String(Math.floor(timeObj["created"])) + "000000";
             }
             traceShipper.endSpan(finalLlmSpan, { error: errorForSpan });
             traceShipper.endSpan(rootSpan, {
-              attributes: [
-                attrString("is_subagent", "true"),
-                attrString("parent_session_id", state.parentId)
-              ],
-              error: errorForSpan
+              attributes: [attrString("is_subagent", "true"), attrString("parent_session_id", state.parentId)],
+              error: errorForSpan,
             });
           } else {
             rootSpan.name = isCompaction ? "ai.compaction" : modelName;
@@ -1842,16 +1732,13 @@ type: ${name != null ? name : "UnknownError"}`;
             const rootAttrs = [
               attrString("ai.operationId", "generateText"),
               attrString("ai.prompt", userInput),
-              attrString(
-                "ai.prompt.messages",
-                buildPromptMessages(state.currentSystemPrompt, state.currentInput)
-              ),
+              attrString("ai.prompt.messages", buildPromptMessages(state.currentSystemPrompt, state.currentInput)),
               attrString("ai.response.text", outputText),
               attrString("gen_ai.system", providerID),
               attrString("gen_ai.request.model", modelID),
               attrString("gen_ai.response.model", modelID),
               attrInt("gen_ai.usage.input_tokens", inputTokens),
-              attrInt("gen_ai.usage.output_tokens", outputTokens)
+              attrInt("gen_ai.usage.output_tokens", outputTokens),
             ];
             if (isCompaction) {
               rootAttrs.push(attrString("is_compaction", "true"));
@@ -1861,14 +1748,11 @@ type: ${name != null ? name : "UnknownError"}`;
               rootAttrs.push(attrInt("gen_ai.usage.reasoning_tokens", reasoningTokens));
             }
             if (state.currentSystemPrompt) {
-              rootAttrs.push(
-                attrString("gen_ai.prompt.0.role", "system"),
-                attrString("gen_ai.prompt.0.content", state.currentSystemPrompt)
-              );
+              rootAttrs.push(attrString("gen_ai.prompt.0.role", "system"), attrString("gen_ai.prompt.0.content", state.currentSystemPrompt));
             }
             traceShipper.endSpan(rootSpan, {
               attributes: rootAttrs,
-              error: errorForSpan
+              error: errorForSpan,
             });
             if (isCompaction) {
               state.isCompacting = false;
@@ -1889,8 +1773,8 @@ type: ${name != null ? name : "UnknownError"}`;
               properties: {
                 plugin_version: PLUGIN_VERSION,
                 message_id: messageId,
-                ...isCompaction ? { is_compaction: true } : {}
-              }
+                ...(isCompaction ? { is_compaction: true } : {}),
+              },
             });
           }
           await traceShipper.flush();
@@ -1929,16 +1813,14 @@ type: ${name != null ? name : "UnknownError"}`;
           sessions.delete(String(sessionID));
         } else if (event.type === "session.error") {
           const errorSessionID = (_e = props["sessionID"]) != null ? _e : sessionID;
-          if (errorSessionID === void 0 || errorSessionID === "")
-            throw new Error("session.error: missing sessionID");
+          if (errorSessionID === void 0 || errorSessionID === "") throw new Error("session.error: missing sessionID");
           const state = sessions.get(String(errorSessionID));
           if (!state) return;
           const errorObj = props["error"];
           if (errorObj == null) throw new Error("session.error: missing error object");
           const errorName = errorObj.name;
           const errorMessage = (_g = (_f = errorObj.data) == null ? void 0 : _f.message) != null ? _g : errorObj.name;
-          if (errorName == null && errorMessage == null)
-            throw new Error("session.error: error object must have name or data.message");
+          if (errorName == null && errorMessage == null) throw new Error("session.error: error object must have name or data.message");
           const errorStr = `${errorMessage != null ? errorMessage : errorName}
 
 type: ${errorName != null ? errorName : "UnknownError"}`;
@@ -1954,15 +1836,13 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           sessions.delete(String(errorSessionID));
         }
       } catch (err) {
-        rateLimitedErrorLog(
-          "event",
-          `[raindrop-ai/opencode-plugin] [error] Error in event hook: ${err instanceof Error ? err.message : String(err)}`
-        );
+        rateLimitedErrorLog("event", `[raindrop-ai/opencode-plugin] [error] Error in event hook: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
     // ------------------------------------------------------------------
     // chat.message — user sent a message; start a new turn with a fresh event ID
     // ------------------------------------------------------------------
+// === SECTION: hook: chat.message ===
     "chat.message": async (messageInput, output) => {
       var _a, _b, _c, _d, _e, _f, _g;
       try {
@@ -1992,16 +1872,14 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
               const m = meta;
               if (typeof m["userId"] === "string") promptMeta.userId = m["userId"];
               if (typeof m["eventName"] === "string") promptMeta.eventName = m["eventName"];
-              if (m["properties"] != null && typeof m["properties"] === "object")
-                promptMeta.properties = m["properties"];
+              if (m["properties"] != null && typeof m["properties"] === "object") promptMeta.properties = m["properties"];
             }
           } else if (part["type"] === "file") {
             const mimeType = part["mediaType"];
             const filename = part["filename"];
             const url = part["url"];
             if (url && (mimeType == null ? void 0 : mimeType.startsWith("image/"))) {
-              if (filename === void 0 || filename === "")
-                throw new Error("chat.message: file part must have filename");
+              if (filename === void 0 || filename === "") throw new Error("chat.message: file part must have filename");
               newAttachments.push({ type: "image", role: "input", name: filename, value: url });
             }
           }
@@ -2009,7 +1887,7 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
         state.eventMetadata = {
           ...baseMeta,
           ...promptMeta,
-          properties: baseMeta.properties || promptMeta.properties ? { ...(_a = baseMeta.properties) != null ? _a : {}, ...(_b = promptMeta.properties) != null ? _b : {} } : void 0
+          properties: baseMeta.properties || promptMeta.properties ? { ...((_a = baseMeta.properties) != null ? _a : {}), ...((_b = promptMeta.properties) != null ? _b : {}) } : void 0,
         };
         const userText = capText2(textParts.join("\n"));
         state.currentInput = userText;
@@ -2028,8 +1906,8 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
               attrString("hostname", hostname),
               attrString("os", os),
               attrString("is_subagent", "true"),
-              attrString("parent_session_id", state.parentId)
-            ]
+              attrString("parent_session_id", state.parentId),
+            ],
           });
           return;
         }
@@ -2037,12 +1915,7 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
         state.currentRootSpan = traceShipper.startSpan({
           name: state.isCompacting ? "ai.compaction" : "ai.event",
           eventId: state.currentEventId,
-          attributes: [
-            attrString("workspace", worktree),
-            attrString("directory", directory),
-            attrString("hostname", hostname),
-            attrString("os", os)
-          ]
+          attributes: [attrString("workspace", worktree), attrString("directory", directory), attrString("hostname", hostname), attrString("os", os)],
         });
         await eventShipper.patch(state.currentEventId, {
           isPending: true,
@@ -2050,18 +1923,17 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           convoId: state.sessionId,
           eventName: (_f = (_e = state.eventMetadata) == null ? void 0 : _e.eventName) != null ? _f : config.eventName,
           input: userText,
-          ...newAttachments.length > 0 ? { attachments: newAttachments } : {},
+          ...(newAttachments.length > 0 ? { attachments: newAttachments } : {}),
           properties: {
             workspace: worktree,
             directory,
             hostname,
             os,
             plugin_version: PLUGIN_VERSION,
-            ...(_g = state.eventMetadata) == null ? void 0 : _g.properties
-          }
+            ...((_g = state.eventMetadata) == null ? void 0 : _g.properties),
+          },
         });
-      } catch (err) {
-      }
+      } catch (err) {}
     },
     // ------------------------------------------------------------------
     // tool.execute.before — record start time only (span created atomically in after)
@@ -2081,11 +1953,7 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
             name: "ai.toolCall",
             parent: spanParent,
             eventId: state.currentEventId,
-            attributes: [
-              attrString("ai.operationId", "ai.toolCall"),
-              attrString("ai.toolCall.name", tool),
-              attrString("ai.toolCall.id", callID)
-            ]
+            attributes: [attrString("ai.operationId", "ai.toolCall"), attrString("ai.toolCall.name", tool), attrString("ai.toolCall.id", callID)],
           });
           liveTaskSpan.startTimeUnixNano = startTimeUnixNano;
           const ctx = {
@@ -2093,8 +1961,8 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
             eventContext: {
               eventId: state.currentEventId,
               userId: (_c = (_b = state.eventMetadata) == null ? void 0 : _b.userId) != null ? _c : state.sessionId,
-              convoId: state.sessionId
-            }
+              convoId: state.sessionId,
+            },
           };
           taskContexts.set(callKey(sessionID, callID), ctx);
           let running = runningTaskCallsBySession.get(sessionID);
@@ -2109,33 +1977,30 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
             parent: spanParent,
             eventId: state.currentEventId,
             name: tool,
-            liveSpan: liveTaskSpan
+            liveSpan: liveTaskSpan,
           });
         } else {
           state.toolSpanStarts.set(callID, {
             startTimeUnixNano,
             parent: spanParent,
             eventId: state.currentEventId,
-            name: tool
+            name: tool,
           });
         }
       } catch (err) {
-        rateLimitedErrorLog(
-          "tool.execute.before",
-          `[raindrop-ai/opencode-plugin] [error] Error in tool.execute.before hook: ${err instanceof Error ? err.message : String(err)}`
-        );
+        rateLimitedErrorLog("tool.execute.before", `[raindrop-ai/opencode-plugin] [error] Error in tool.execute.before hook: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
     // ------------------------------------------------------------------
     // tool.execute.after — create tool span atomically with both start and end times
     // ------------------------------------------------------------------
+// === SECTION: hook: tool.execute.after ===
     "tool.execute.after": async (toolInput, result) => {
       try {
         const { tool, sessionID, callID, args } = toolInput;
         const state = sessions.get(sessionID);
         if (!state || !state.currentEventId) return;
-        if (args === void 0 || args === null)
-          throw new Error("tool.execute.after: args is required");
+        if (args === void 0 || args === null) throw new Error("tool.execute.after: args is required");
         const toolCallArgs = typeof args === "string" ? capText2(args) : boundedStringify(args);
         const startInfo = state.toolSpanStarts.get(callID);
         state.toolSpanStarts.delete(callID);
@@ -2165,10 +2030,7 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           const toolResult = boundedStringify(resultOutput);
           if (startInfo.liveSpan) {
             traceShipper.endSpan(startInfo.liveSpan, {
-              attributes: [
-                attrString("ai.toolCall.args", toolCallArgs),
-                attrString("ai.toolCall.result", toolResult)
-              ]
+              attributes: [attrString("ai.toolCall.args", toolCallArgs), attrString("ai.toolCall.result", toolResult)],
             });
           } else {
             traceShipper.createSpan({
@@ -2182,8 +2044,8 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
                 attrString("ai.toolCall.name", tool),
                 attrString("ai.toolCall.id", callID),
                 attrString("ai.toolCall.args", toolCallArgs),
-                attrString("ai.toolCall.result", toolResult)
-              ]
+                attrString("ai.toolCall.result", toolResult),
+              ],
             });
           }
         }
@@ -2191,15 +2053,13 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           markTaskCallFinished(sessionID, callID);
         }
       } catch (err) {
-        rateLimitedErrorLog(
-          "tool.execute.after",
-          `[raindrop-ai/opencode-plugin] [error] Error in tool.execute.after hook: ${err instanceof Error ? err.message : String(err)}`
-        );
+        rateLimitedErrorLog("tool.execute.after", `[raindrop-ai/opencode-plugin] [error] Error in tool.execute.after hook: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
     // ------------------------------------------------------------------
     // experimental.session.compacting — fires before compaction LLM call
     // ------------------------------------------------------------------
+// === SECTION: hook: experimental.session.compacting ===
     "experimental.session.compacting": async (input, _output) => {
       try {
         const sessionID = input.sessionID;
@@ -2211,13 +2071,14 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
       } catch (err) {
         rateLimitedErrorLog(
           "experimental.session.compacting",
-          `[raindrop-ai/opencode-plugin] [error] Error in experimental.session.compacting hook: ${err instanceof Error ? err.message : String(err)}`
+          `[raindrop-ai/opencode-plugin] [error] Error in experimental.session.compacting hook: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     },
     // ------------------------------------------------------------------
     // experimental.chat.system.transform — capture system prompt (read-only)
     // ------------------------------------------------------------------
+// === SECTION: hook: experimental.chat.system.transform ===
     "experimental.chat.system.transform": async (input, output) => {
       try {
         if (!config.captureSystemPrompt) return;
@@ -2235,10 +2096,10 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
       } catch (err) {
         rateLimitedErrorLog(
           "experimental.chat.system.transform",
-          `[raindrop-ai/opencode-plugin] [error] Error in experimental.chat.system.transform hook: ${err instanceof Error ? err.message : String(err)}`
+          `[raindrop-ai/opencode-plugin] [error] Error in experimental.chat.system.transform hook: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
-    }
+    },
   };
 }
 
@@ -2252,12 +2113,25 @@ async function plugin(input) {
   if (config.traceOnly) {
     const TRACE_LOG_PATH = require("node:os").homedir() + "/.raindrop/trace.log";
     const fs = require("node:fs");
-    try { fs.mkdirSync(require("node:os").homedir() + "/.raindrop", { recursive: true }); } catch (e) {}
-    const origLog = console.log, origWarn = console.warn, origErr = console.error;
+    try {
+      fs.mkdirSync(require("node:os").homedir() + "/.raindrop", { recursive: true });
+    } catch (e) {}
     const stamp = () => new Date().toISOString();
-    console.log  = (...args) => { try { fs.appendFileSync(TRACE_LOG_PATH, `[${stamp()}] [log]  ${args.join(" ")}\n`); } catch (e) {} };
-    console.warn = (...args) => { try { fs.appendFileSync(TRACE_LOG_PATH, `[${stamp()}] [warn] ${args.join(" ")}\n`); } catch (e) {} };
-    console.error= (...args) => { try { fs.appendFileSync(TRACE_LOG_PATH, `[${stamp()}] [err]  ${args.join(" ")}\n`); } catch (e) {} };
+    console.log = (...args) => {
+      try {
+        fs.appendFileSync(TRACE_LOG_PATH, `[${stamp()}] [log]  ${args.join(" ")}\n`);
+      } catch (e) {}
+    };
+    console.warn = (...args) => {
+      try {
+        fs.appendFileSync(TRACE_LOG_PATH, `[${stamp()}] [warn] ${args.join(" ")}\n`);
+      } catch (e) {}
+    };
+    console.error = (...args) => {
+      try {
+        fs.appendFileSync(TRACE_LOG_PATH, `[${stamp()}] [err]  ${args.join(" ")}\n`);
+      } catch (e) {}
+    };
   }
   function appLog(level, message) {
     console.log(`[raindrop-ai/opencode-plugin] [${level}] ${message}`);
@@ -2268,15 +2142,12 @@ async function plugin(input) {
   if (!config.writeKey && !hasLocalDestination) {
     appLog(
       "warn",
-      "RAINDROP_WRITE_KEY not set and no local Workshop daemon detected \u2014 Raindrop tracing disabled. Set RAINDROP_WRITE_KEY for cloud, or RAINDROP_LOCAL_WORKSHOP_URL / RAINDROP_LOCAL_DEBUGGER for local-only mode."
+      "RAINDROP_WRITE_KEY not set and no local Workshop daemon detected \u2014 Raindrop tracing disabled. Set RAINDROP_WRITE_KEY for cloud, or RAINDROP_LOCAL_WORKSHOP_URL / RAINDROP_LOCAL_DEBUGGER for local-only mode.",
     );
     return {};
   }
   if (config.debug) {
-    const destinations = [
-      config.writeKey ? `cloud (${config.endpoint})` : null,
-      resolvedLocalUrl ? `local Workshop (${resolvedLocalUrl})` : null
-    ].filter(Boolean);
+    const destinations = [config.writeKey ? `cloud (${config.endpoint})` : null, resolvedLocalUrl ? `local Workshop (${resolvedLocalUrl})` : null].filter(Boolean);
     appLog("info", `Raindrop tracing enabled \u2014 destinations: ${destinations.join(", ")}`);
   }
   const eventShipper = new EventShipper2({
@@ -2284,25 +2155,17 @@ async function plugin(input) {
     endpoint: config.endpoint,
     debug: config.debug,
     projectId: config.projectId,
-    localDebuggerUrl: config.localWorkshopUrl
+    localDebuggerUrl: config.localWorkshopUrl,
   });
   const traceShipper = new TraceShipper2({
     writeKey: config.writeKey,
     endpoint: config.endpoint,
     debug: config.debug,
     projectId: config.projectId,
-    localDebuggerUrl: config.localWorkshopUrl
+    localDebuggerUrl: config.localWorkshopUrl,
   });
   const worktree = (_a = input.worktree) != null ? _a : input.directory;
-  const hooks = createHooks(
-    config,
-    worktree,
-    input.directory,
-    eventShipper,
-    traceShipper
-  );
+  const hooks = createHooks(config, worktree, input.directory, eventShipper, traceShipper);
   return hooks;
 }
-export {
-  plugin as default
-};
+export { plugin as default };
