@@ -15,107 +15,49 @@
 
 ## Active Features
 
+### F-002 — Developer experience: readable code, install helper, CI smoke test, file logs
+
+**Context:** Plugin code currently lives only in pre-built `dist/index.js` / `dist/index.cjs` (minified by tsup from upstream's `src/index.ts` which we don't have). For a 1-dev fork that's not blocking, but: (a) every bug fix requires 30 min of reading minified code, (b) local install of a fork requires manual symlink into `~/.cache/opencode/packages/` (discovered 2026-07-09 — no public docs), (c) we have no CI to catch regressions of F-001 fix, (d) `debug: true` in raindrop.json dumps JSON to TUI stdout (pitfall #17). F-002 attacks all four.
+
+**Scope:** dev-experience only — does not add user-facing features or change the plugin's runtime behavior (except for F-002.6 which adds an opt-in `trace_only` flag).
+
+**Sub-features (each its own commit):**
+
+- **F-002.1** — Reformat `dist/*.js` via prettier + add section markers (numbered comments demarcating hook functions, shipper classes, config parser, state, utils). Output stays in `dist/` (this is still minified-ish, but at least navigable). This is a stepping stone to a real `src/` if/when we choose to maintain one.
+- **F-002.4** — `scripts/install-local.sh` — single command to populate `~/.cache/opencode/packages/@grudanov-nikolay/opencode-workshop-plugin@<version>/node_modules/...` with a symlink to the working tree. Replaces 15 min of manual cache surgery.
+- **F-002.5** — `.github/workflows/smoke.yml` + `scripts/smoke-test.sh` — on every push, syntax-check both bundles, then run a real OpenCode invocation against a real MCP tool (`fff_find_files`), grep for the F-001 error string, fail the build if it reappears. Workshop daemon (already required for the workflow) is brought up via `raindrop workshop start` (or we skip the e2e part and only do syntax check until we have a CI env with OpenCode pre-installed).
+- **F-002.6** — `trace_only: true` flag in `raindrop.json` — when set, plugin logs go to `~/.raindrop/trace.log` (append) instead of `console.log` (which pollutes TUI stdout). Backwards-compatible default: `false` → existing behavior.
+
+**Why this Feature and not user-facing fixes first:** Kolya explicitly requested dev-experience improvements over feature work (2026-07-09, after F-001 closure). Rationale: faster next fix + better debugging reduces time-to-fix for the user-facing bugs we'll discover later.
+
+**Todos:**
+- [x] Plan F-002 with 4 sub-features and 4 commits (this entry)
+- [ ] F-002.4: write `scripts/install-local.sh` (10 min)
+- [ ] F-002.4: test install-local.sh by reinstalling our plugin in `~/.cache/opencode/packages/`
+- [ ] F-002.4: add install instructions to `AGENTS.md` (Agent section) and `README.md` (User section)
+- [ ] F-002.6: patch both `dist/*.js` to honour `trace_only` flag — when true, redirect `console.log` to `~/.raindrop/trace.log` (append)
+- [ ] F-002.6: verify in smoke test that `debug: true, trace_only: true` → TUI stays clean, log file gets content
+- [ ] F-002.5: write `.github/workflows/smoke.yml` (syntax check stage)
+- [ ] F-002.5: write `scripts/smoke-test.sh` (the A/B test we did today, scripted)
+- [ ] F-002.5: smoke test on local, commit + push
+- [ ] F-002.1: prettier reformat `dist/index.js` (preview only — git diff before commit)
+- [ ] F-002.1: add section markers at hook entry points (grep-verifiable)
+- [ ] F-002.1: commit reformat (no behavior change)
+- [ ] Push all 4 commits to GitHub (Kolya's explicit go-ahead)
+
+---
+
 ### F-001 — Fix `tool.execute.after: result.output is required` for MCP tools
 
-**Context:** Upstream plugin 0.0.18 crashes on every MCP tool call because OpenCode passes raw `CallToolResult` (`{content: [{type, text}]}`) to the hook instead of the documented `{title, output, metadata}` shape. Upstream issue [anomalyco/opencode#21149](https://github.com/anomalyco/opencode/issues/21149) will not be fixed (PR #21150 auto-closed 2026-05-15). Symptom: Workshop loses all spans from MCP-using agents (GigaChat 3 Ultra via MLProxy, jupyter_executor, anything using MCP).
-
-**Files to edit (v0.1.0-kolya.1 ships hand-edited dist because src/ not yet reconstructed):**
-- `dist/index.js` — line 2143–2147 region (the `if (!("output" in result))` block)
-- `dist/index.cjs` — same fix, CJS form
-- `package.json` — version bump to `0.1.0-kolya.1`
-
-**Fix sketch:**
-```js
-// instead of:
-//   if (!("output" in result) || result.output === void 0)
-//     throw new Error("tool.execute.after: result.output is required");
-// use:
-let resultOutput = result.output;
-if (resultOutput === void 0 && Array.isArray(result.content)) {
-  resultOutput = result.content
-    .filter(c => c?.type === "text" && typeof c.text === "string")
-    .map(c => c.text)
-    .join("\n") || "(empty MCP content)";
-}
-if (resultOutput === void 0) resultOutput = "(no output)";
-const toolResult = boundedStringify(resultOutput);
-```
-
-**Todos:**
-- [x] Extract npm tarball 0.0.18 to working tree
-- [x] Init git repo at `nikolay-grudanov/opencode-workshop-plugin`
-- [x] Move `package/*` → repo root
-- [x] Rewrite `package.json` (scope `@grudanov-nikolay`, version `0.1.0-kolya.1`, add `repository` + `author`)
-- [x] Add `AGENTS.md` (this file's companion)
-- [x] Add `ai-docs/PLAN.md` (this file)
-- [x] Patch `dist/index.js` with the MCP-output fallback (around line 2143–2147) — **v0.1.0-kolya.2**
-- [x] Patch `dist/index.cjs` with the same fix — **v0.1.0-kolya.2**
-- [x] Syntax check both bundles (CJS via `node --check`, ESM via dynamic import) — both pass
-- [x] Local smoke test: A/B against original 0.0.18 on real MCP tool (`fff_find_files`) — **PASS**. Original 0.0.18: 2× `[error] tool.execute.after: result.output is required`. Our fork: 0 errors, 2 tool_calls landed in Workshop with status=OK, output_preview contains the file list. Plugin version reported in Workshop metadata: `0.0.18`. Bump to `0.1.0-kolya.3`.
-- [x] Bump version to `0.1.0-kolya.3` after smoke test passes
-- [ ] Commit + push (with Kolya's explicit go-ahead)
-
----
-
-### F-002 — Reverse-engineer / reconstruct `src/index.ts` from `dist/`
-
-**Context:** The dist files are minified bundles — they work, but they're impossible to maintain long-term. We need a readable `src/` so future Kolya (or another agent) can patch the plugin in 5 minutes instead of 30. This is the foundation for all later Features.
-
-**Approach options:**
-- A. **AST lift** — use `jscodeshift` or `swc` to convert `dist/index.js` → readable `src/index.ts`. Loses variable names (still minified) but keeps structure.
-- B. **Hand rewrite from README + dist reading** — slow but produces a clean, named codebase. Estimated ~6 hours of work for ~85KB of bundled code.
-- C. **Wait for upstream to open-source src** — low probability.
-
-**Recommended:** B (hand rewrite, focused on the hooks and core pipeline first).
-
-**Todos:**
-- [ ] Decide approach (A / B / C) — needs Kolya input
-- [ ] Create `src/index.ts` skeleton with the documented hooks (`tool.execute.after`, `experimental.session.compacting`, `experimental.chat.system.transform`, `chat.message`, `chat.params`, etc.)
-- [ ] Wire `tsup` build (copy from upstream `package.json` tsup config we removed)
-- [ ] Verify `pnpm build` produces byte-equivalent (or near-equivalent) `dist/`
-- [ ] Delete hand-edited `dist/index.{js,cjs}` once `pnpm build` is wired
-- [ ] Add `pnpm test` smoke test that boots Workshop daemon and streams a fake event
-
----
-
-### F-003 — Per-project `eventName` via `RAINDROP_EVENT_METADATA` (hardened)
-
-**Context:** Upstream reads `RAINDROP_EVENT_METADATA` env var (`{userId, eventName, properties}`) to set the per-project `eventName` in Workshop. We use this for `oc-kd` / `oc-diagram` / `oc-notraces` wrapper scripts. **Current problem:** env var may be set shell-wide and leak into the wrong project, and there's no validation of the JSON.
-
-**Plan:**
-- Validate `RAINDROP_EVENT_METADATA` is valid JSON; if not, log warning and ignore.
-- Strip env var in a dedicated `unset RAINDROP_EVENT_METADATA` line of every wrapper script (already done for `oc-notraces`).
-- Document the wrapper script pattern in `README.md`.
-
-**Todos:**
-- [ ] Audit `dist/index.js` for where `RAINDROP_EVENT_METADATA` is parsed
-- [ ] Add JSON validation + warning on parse failure
-- [ ] Update `README.md` with the wrapper pattern (`oc-kd`, `oc-diagram`, `oc-notraces`)
-- [ ] Add `examples/wrapper-scripts/` with 3 reference scripts
-- [ ] Local test: launch `oc-kd` in a kolya-dashboard-clone dir, verify Workshop UI shows `eventName=kolya-dashboard`
-
----
-
-### F-004 — `RAINDROP_LOCAL_WORKSHOP_URL` env-var precedence fix
-
-**Context:** Env var unconditionally overrides `raindrop.json` `local_workshop_url`. If a stale env var is set (e.g. from `raindrop workshop setup` adding it to `.env`), Workshop streaming silently breaks.
-
-**Fix sketch (in `resolveLocalWorkshopUrl`, around dist/index.js:1203-1212):**
-- If env var is unset → use file value (current behaviour)
-- If env var is empty/`null`/`false` → null (disable) (current behaviour)
-- If env var matches `http(s)://(localhost|127.0.0.1|0.0.0.0|::1)(:PORT)?/...` → use env value (explicit local opt-in)
-- **Otherwise → log warning, fall back to file value**
-
-**Todos:**
-- [ ] Patch `resolveLocalWorkshopUrl` in `dist/index.{js,cjs}` (and later `src/`)
-- [ ] Add env-var test: set `RAINDROP_LOCAL_WORKSHOP_URL=http://evil.example.com/v1` → verify workshop still streams to local
-- [ ] Update CHANGELOG entry
+*(closed 2026-07-09, see "Closed Features" at bottom)*
 
 ---
 
 ## Backlog (not yet started)
 
-- F-005 — Sync with upstream tarball releases (cron: check npm for new `@raindrop-ai/opencode-plugin` versions monthly, dump diff)
+- F-003 — Reverse-engineer full `src/index.ts` from `dist/` (F-002.1 is a lighter-weight alternative)
+- F-004 — Harden `RAINDROP_EVENT_METADATA` (JSON validation, warning on parse failure)
+- F-005 — `RAINDROP_LOCAL_WORKSHOP_URL` env-var precedence fix (fall back to file if env value is non-local)
 - F-006 — Multi-agent trace correlation (link child `task` spans to parent session, see `mapChildSessionToParent` in dist/index.js:1627-1629)
 - F-007 — Test coverage: e2e with Workshop daemon + mocked OpenCode
 - F-008 — npm publish automation via GitHub Actions on tag push
@@ -125,7 +67,13 @@ const toolResult = boundedStringify(resultOutput);
 
 ## Closed Features
 
-_(none yet — F-001 will land here once all todos are checked)_
+### F-001 — Fix `tool.execute.after: result.output is required` for MCP tools
+
+**Closed 2026-07-09.** Fixed upstream bug [anomalyco/opencode#21149](https://github.com/anomalyco/opencode/issues/21149) by patching `dist/index.js` and `dist/index.cjs` to assemble `result.output` from `result.content[]` when missing (MCP tool calls pass raw `CallToolResult` instead of `{title, output, metadata}`).
+
+**Verified by A/B smoke test:** original 0.0.18 produced 2× `result.output is required` errors; fork v0.1.0-kolya.3 produced 0. Workshop run landed with `plugin_version=0.0.18` (our dist), `tool_calls.total=2, errors=0`, `output_preview` contains the file list.
+
+**Commits:** `84e463a` (initial), `d459f10` (MCP fallback patch), `67219d0` (smoke test + bump v0.1.0-kolya.3). Pushed: `1e9b275` on main.
 
 ---
 
