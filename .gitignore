@@ -1,0 +1,26 @@
+# Build artefacts
+node_modules/
+# NOTE: v0.1.0-kolya.1 ships pre-built dist/ from upstream tarball.
+# Once F-002 lands (src/ + tsup build), uncomment the line below and
+# the build will regenerate dist/. For now, dist/ IS the source of truth.
+# dist/
+*.tsbuildinfo
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Local env
+.env
+.env.local
+
+# Test artefacts
+coverage/
+.nyc_output/
