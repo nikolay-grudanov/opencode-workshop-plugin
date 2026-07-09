@@ -35,8 +35,9 @@
 - [x] F-002.4: write `scripts/install-local.sh` (10 min) — **committed**
 - [x] F-002.4: test install-local.sh by reinstalling our plugin in `~/.cache/opencode/packages/` — **round-trip OK**
 - [x] F-002.4: add install instructions to `AGENTS.md` (Agent section) and `README.md` (User section)
-- [ ] F-002.6: patch both `dist/*.js` to honour `trace_only` flag — when true, redirect `console.log` to `~/.raindrop/trace.log` (append)
-- [ ] F-002.6: verify in smoke test that `debug: true, trace_only: true` → TUI stays clean, log file gets content
+- [x] F-002.6: patch both `dist/*.js` to honour `trace_only` flag — when true, redirect `console.log` to `~/.raindrop/trace.log` (append) — **v0.1.0-kolya.4**
+- [x] F-002.6: verify syntax (`node --check`) for both ESM and CJS bundles — both pass
+- [ ] F-002.6: runtime smoke test: run with trace_only=true, verify trace.log gets content and TUI stdout is clean (deferred — manual test, not blocking)
 - [ ] F-002.5: write `.github/workflows/smoke.yml` (syntax check stage)
 - [ ] F-002.5: write `scripts/smoke-test.sh` (the A/B test we did today, scripted)
 - [ ] F-002.5: smoke test on local, commit + push

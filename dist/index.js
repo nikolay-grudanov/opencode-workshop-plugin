@@ -1197,6 +1197,11 @@ function loadConfig(projectDirectory) {
     debug: process.env["RAINDROP_DEBUG"] === "true" ? true : (_g = merged.debug) != null ? _g : false,
     captureSystemPrompt: process.env["RAINDROP_CAPTURE_SYSTEM_PROMPT"] !== void 0 ? process.env["RAINDROP_CAPTURE_SYSTEM_PROMPT"] === "true" : (_h = merged.capture_system_prompt) != null ? _h : false,
     eventMetadata,
+    // KOLYA PATCH (F-002.6): trace_only flag — when true, plugin logs go to
+    // ~/.raindrop/trace.log (append) instead of stdout/TUI. Set in raindrop.json
+    // as "trace_only": true, or via env RAINDROP_TRACE_ONLY=true. Default: false
+    // (existing behaviour, writes to stdout).
+    traceOnly: process.env["RAINDROP_TRACE_ONLY"] === "true" ? true : (merged.trace_only === true),
     localWorkshopUrl: resolveLocalWorkshopUrl(merged.local_workshop_url)
   };
 }
@@ -2241,6 +2246,19 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
 async function plugin(input) {
   var _a;
   const config = loadConfig(input.directory);
+  // KOLYA PATCH (F-002.6): when trace_only is set, redirect console.log/warn/error
+  // to ~/.raindrop/trace.log (append). Keeps TUI stdout clean for the chat.
+  // Backwards-compatible: default is to write to stdout (existing behaviour).
+  if (config.traceOnly) {
+    const TRACE_LOG_PATH = require("node:os").homedir() + "/.raindrop/trace.log";
+    const fs = require("node:fs");
+    try { fs.mkdirSync(require("node:os").homedir() + "/.raindrop", { recursive: true }); } catch (e) {}
+    const origLog = console.log, origWarn = console.warn, origErr = console.error;
+    const stamp = () => new Date().toISOString();
+    console.log  = (...args) => { try { fs.appendFileSync(TRACE_LOG_PATH, `[${stamp()}] [log]  ${args.join(" ")}\n`); } catch (e) {} };
+    console.warn = (...args) => { try { fs.appendFileSync(TRACE_LOG_PATH, `[${stamp()}] [warn] ${args.join(" ")}\n`); } catch (e) {} };
+    console.error= (...args) => { try { fs.appendFileSync(TRACE_LOG_PATH, `[${stamp()}] [err]  ${args.join(" ")}\n`); } catch (e) {} };
+  }
   function appLog(level, message) {
     console.log(`[raindrop-ai/opencode-plugin] [${level}] ${message}`);
   }
