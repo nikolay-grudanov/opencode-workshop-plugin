@@ -48,10 +48,12 @@ const toolResult = boundedStringify(resultOutput);
 - [x] Rewrite `package.json` (scope `@grudanov-nikolay`, version `0.1.0-kolya.1`, add `repository` + `author`)
 - [x] Add `AGENTS.md` (this file's companion)
 - [x] Add `ai-docs/PLAN.md` (this file)
-- [ ] Patch `dist/index.js` with the MCP-output fallback (around line 2143–2147)
-- [ ] Patch `dist/index.cjs` with the same fix
+- [x] Patch `dist/index.js` with the MCP-output fallback (around line 2143–2147) — **v0.1.0-kolya.2**
+- [x] Patch `dist/index.cjs` with the same fix — **v0.1.0-kolya.2**
+- [x] Syntax check both bundles (CJS via `node --check`, ESM via dynamic import) — both pass
 - [ ] Local smoke test: `npm install file:../opencode-workshop-plugin` in a test project, run `opencode run` with an MCP tool, verify no crash
 - [ ] Commit + push (with Kolya's explicit go-ahead)
+- [ ] Bump version to `0.1.0-kolya.3` after smoke test passes
 
 ---
 

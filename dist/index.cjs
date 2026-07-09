@@ -2161,9 +2161,22 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
         }
         if (startInfo) {
           const endTimeUnixNano = nowUnixNanoString();
-          if (!("output" in result) || result.output === void 0)
-            throw new Error("tool.execute.after: result.output is required");
-          const toolResult = boundedStringify(result.output);
+          // KOLYA PATCH (F-001): for MCP tool calls OpenCode passes raw CallToolResult
+          // ({content: [{type, text}]}) instead of {title, output, metadata}.
+          // Upstream issue anomalyco/opencode#21149 won't be fixed (PR #21150
+          // auto-closed 2026-05-15). We fall back to assembling text from
+          // content[] so MCP spans land in Workshop instead of crashing the agent.
+          let resultOutput = result.output;
+          if (resultOutput === void 0 && Array.isArray(result.content)) {
+            resultOutput = result.content
+              .filter((c) => c && c.type === "text" && typeof c.text === "string")
+              .map((c) => c.text)
+              .join("\n") || "(empty MCP content)";
+          }
+          if (resultOutput === void 0) {
+            resultOutput = "(no output)";
+          }
+          const toolResult = boundedStringify(resultOutput);
           if (startInfo.liveSpan) {
             traceShipper.endSpan(startInfo.liveSpan, {
               attributes: [
