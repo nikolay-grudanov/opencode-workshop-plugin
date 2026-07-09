@@ -1,0 +1,80 @@
+name: Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  # Fast check — runs on every push, no external deps. Catches the case
+  # where someone commits a broken dist/ that fails to load.
+  syntax-check:
+    name: Syntax check (dist bundles)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Syntax check dist/index.cjs
+        run: node --check dist/index.cjs
+
+      - name: Syntax check dist/index.js (ESM)
+        run: |
+          node --input-type=module -e "await import('./dist/index.js'); console.log('ESM bundle: import OK');"
+
+      - name: Verify F-001 fix is in place
+        run: |
+          if grep -q "tool.execute.after: result.output is required" dist/index.js dist/index.cjs; then
+            echo "::error::F-001 regression detected: the original 'result.output is required' throw is back in dist/."
+            exit 1
+          fi
+          echo "F-001 fix present in both bundles (no 'result.output is required' throw found)."
+
+      - name: Verify F-002.6 trace_only patch is in place
+        run: |
+          if ! grep -q "KOLYA PATCH (F-002.6)" dist/index.js dist/index.cjs; then
+            echo "::error::F-002.6 regression: trace_only patch missing from one or both bundles."
+            exit 1
+          fi
+          echo "F-002.6 trace_only patch present in both bundles."
+
+  # Full e2e smoke — requires OpenCode + an MCP tool + Workshop daemon. Only
+  # run when triggered manually (workflow_dispatch) because it needs a local
+  # Workshop setup. Skip by default to keep CI fast.
+  smoke-test:
+    name: E2E smoke (manual trigger)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun (for OpenCode)
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install OpenCode
+        run: |
+          # We can't easily install the closed-source OpenCode in CI;
+          # the script will skip if opencode is not available.
+          which opencode || npm install -g opencode-ai@latest
+
+      - name: Start Raindrop Workshop daemon
+        run: |
+          which raindrop || (curl -fsSL https://raindrop.sh/install | bash)
+          raindrop workshop start &
+          sleep 5
+          curl -fsS http://localhost:5899/health
+
+      - name: Run smoke test
+        run: ./scripts/smoke-test.sh
+
+      - name: Cleanup
+        if: always()
+        run: raindrop workshop stop || true

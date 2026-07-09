@@ -1,6 +1,6 @@
 {
   "name": "@grudanov-nikolay/opencode-workshop-plugin",
-  "version": "0.1.0-kolya.4",
+  "version": "0.1.0-kolya.5",
   "description": "Kolya's fork of @raindrop-ai/opencode-plugin. v0.1.0-kolya.3 fixes MCP tool.execute.after crash (upstream issue #21149), verified by A/B smoke test against original 0.0.18 on fff_find_files MCP tool. Drop-in replacement.",
   "type": "module",
   "main": "dist/index.js",
