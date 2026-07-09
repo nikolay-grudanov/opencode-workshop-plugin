@@ -51,9 +51,9 @@ const toolResult = boundedStringify(resultOutput);
 - [x] Patch `dist/index.js` with the MCP-output fallback (around line 2143–2147) — **v0.1.0-kolya.2**
 - [x] Patch `dist/index.cjs` with the same fix — **v0.1.0-kolya.2**
 - [x] Syntax check both bundles (CJS via `node --check`, ESM via dynamic import) — both pass
-- [ ] Local smoke test: `npm install file:../opencode-workshop-plugin` in a test project, run `opencode run` with an MCP tool, verify no crash
+- [x] Local smoke test: A/B against original 0.0.18 on real MCP tool (`fff_find_files`) — **PASS**. Original 0.0.18: 2× `[error] tool.execute.after: result.output is required`. Our fork: 0 errors, 2 tool_calls landed in Workshop with status=OK, output_preview contains the file list. Plugin version reported in Workshop metadata: `0.0.18`. Bump to `0.1.0-kolya.3`.
+- [x] Bump version to `0.1.0-kolya.3` after smoke test passes
 - [ ] Commit + push (with Kolya's explicit go-ahead)
-- [ ] Bump version to `0.1.0-kolya.3` after smoke test passes
 
 ---
 
