@@ -32,9 +32,9 @@
 
 **Todos:**
 - [x] Plan F-002 with 4 sub-features and 4 commits (this entry)
-- [ ] F-002.4: write `scripts/install-local.sh` (10 min)
-- [ ] F-002.4: test install-local.sh by reinstalling our plugin in `~/.cache/opencode/packages/`
-- [ ] F-002.4: add install instructions to `AGENTS.md` (Agent section) and `README.md` (User section)
+- [x] F-002.4: write `scripts/install-local.sh` (10 min) — **committed**
+- [x] F-002.4: test install-local.sh by reinstalling our plugin in `~/.cache/opencode/packages/` — **round-trip OK**
+- [x] F-002.4: add install instructions to `AGENTS.md` (Agent section) and `README.md` (User section)
 - [ ] F-002.6: patch both `dist/*.js` to honour `trace_only` flag — when true, redirect `console.log` to `~/.raindrop/trace.log` (append)
 - [ ] F-002.6: verify in smoke test that `debug: true, trace_only: true` → TUI stays clean, log file gets content
 - [ ] F-002.5: write `.github/workflows/smoke.yml` (syntax check stage)

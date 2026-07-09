@@ -27,6 +27,20 @@ The upstream plugin source is **not on GitHub** — it ships only as an npm tarb
 
 ## Working conventions in this repo
 
+### Working conventions in this repo
+
+### Local install / testing
+
+OpenCode 1.17.x loads plugins **only** from `~/.cache/opencode/packages/<scope>/<name>@<version>/node_modules/<name>/` — `npm link` and `file:` references in `package.json` are NOT picked up. Use [`scripts/install-local.sh`](scripts/install-local.sh) to populate the cache via a symlink (one command, idempotent):
+
+```bash
+./scripts/install-local.sh          # install current version
+./scripts/install-local.sh --reinstall  # refresh
+./scripts/install-local.sh --uninstall  # remove
+```
+
+Then add the plugin to your OpenCode config (see next section).
+
 ### PLAN.md is the single source of truth
 
 - All work is organised as **Features**.
