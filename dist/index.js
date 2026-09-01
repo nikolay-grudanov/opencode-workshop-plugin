@@ -289,6 +289,30 @@ function extractSubagentNameFromPrompt(text) {
   if (m) return m[1].trim().slice(0, 120);
   return "";
 }
+// KOLYA PATCH (F-010 v2): in OpenCode 1.18 sub-agents are invoked WITHOUT an
+// identity preamble in their first user message (the system prompt holds the
+// preamble; chat.message parts only carry the user's task). So we fall back to
+// `args.subagent_type`, which is the literal agent name registered in
+// opencode.jsonc (`research`, `explore`, `orchestrator`). Tolerates both
+// object and JSON-string shapes — same hardening as extractTaskLabel.
+function extractSubagentNameFromTaskArgs(rawArgs) {
+  let args = rawArgs;
+  if (typeof args === "string") {
+    const trimmed = args.trim();
+    if (!trimmed.startsWith("{")) return "";
+    try {
+      args = JSON.parse(trimmed);
+    } catch (_err) {
+      return "";
+    }
+  }
+  if (!args || typeof args !== "object") return "";
+  const st = args.subagent_type;
+  if (typeof st === "string" && st.trim().length > 0 && /^[A-Za-z0-9._\-]{1,64}$/.test(st.trim())) {
+    return st.trim();
+  }
+  return "";
+}
 function buildOtlpSpan(args) {
   const attrs = args.attributes.filter((x) => x !== void 0);
   const span = {
@@ -1216,7 +1240,7 @@ function resolveLocalWorkshopUrl(fileValue) {
 // package.json
 var package_default = {
   name: "@grudanov-nikolay/opencode-workshop-plugin",
-  version: "0.1.0-kolya.9",
+  version: "0.1.0-kolya.10",
   description: "Raindrop observability plugin for OpenCode \u2014 automatic session/event/span tracing",
   type: "module",
   main: "dist/index.js",
@@ -1404,6 +1428,12 @@ function createSessionParentMapHelpers({
     if (!parentInfo || !state) return;
     state.parentId = parentInfo.parentId;
     state.parentTaskSpanIds = parentInfo.parentTaskSpanIds;
+    // F-010 v2: copy subagent_name so the first chat.message in the child
+    // session (which may fire before tool.execute.after on the parent)
+    // already has the name available for the Subagent root span.
+    if (parentInfo.subagentName && !state.subagentName) {
+      state.subagentName = parentInfo.subagentName;
+    }
     state.parentEventContext = parentInfo.eventContext;
   }
   function queuePendingChildByCallKey(key, childSessionId) {
@@ -1956,7 +1986,36 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           // once per session; the Subagent root and child LLM spans carry
           // subagent_name so Workshop UI shows the label in the pill.
           if (state.subagentName === void 0) {
-            state.subagentName = extractSubagentNameFromPrompt(textParts.join("\n"));
+            const fromPrompt = extractSubagentNameFromPrompt(textParts.join("\n"));
+            // F-010 v2: chain of fallbacks. Priority:
+            // (1) identity preamble in prompt text (legacy F-010)
+            // (2) parent's taskContexts — set by tool.execute.before which
+            //     fires BEFORE chat.message for child sessions in 1.18.
+            // (3) mapChildSessionToParent (tool.execute.after may be too late)
+            if (fromPrompt) {
+              state.subagentName = fromPrompt;
+            } else {
+              const parentId = state.parentId;
+              if (parentId) {
+                const runningCalls = runningTaskCallsBySession.get(parentId);
+                if (runningCalls) {
+                  for (const callID of runningCalls) {
+                    const ctx = taskContexts.get(callKey(parentId, callID));
+                    if (ctx && ctx.subagentName) {
+                      state.subagentName = ctx.subagentName;
+                      break;
+                    }
+                  }
+                }
+              }
+              if (!state.subagentName) {
+                const childMap = mapChildSessionToParent.get(sessionID);
+                const fromMap = childMap == null ? void 0 : childMap.subagentName;
+                if (typeof fromMap === "string" && fromMap.length > 0) {
+                  state.subagentName = fromMap;
+                }
+              }
+            }
           }
           state.currentEventId = state.parentEventContext.eventId;
           const subagentRootAttrs = [
@@ -2019,13 +2078,24 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           // task tool receives `description` (short, user-supplied) and `prompt`
           // (full body) — we prefer description and fall back to a 60-char
           // prompt prefix. Mirrored to the matching branch in tool.execute.after.
-          const taskLabel = extractTaskLabel(toolInput.args);
+          // F-010 v2: pull subagent_name from args.subagent_type — this is the
+          // literal agent name registered in opencode.jsonc and shows in the
+          // Workshop pill. Falls back to taskLabel (description/prompt prefix)
+          // when subagent_type is missing.
+          // SDK note: in OpenCode 1.18 `tool.execute.before` puts args in
+          // `_output.args` (output shape), NOT in `toolInput.args` (input).
+          // The pre-1.18 signature had args on input; 1.18 moved it.
+          const beforeArgs = (_output && _output.args) || toolInput.args;
+          const taskLabel = extractTaskLabel(beforeArgs);
+          const taskSubagentName = extractSubagentNameFromTaskArgs(beforeArgs);
+
           const taskAttrs = [
             attrString("ai.operationId", "ai.toolCall"),
             attrString("ai.toolCall.name", tool),
             attrString("ai.toolCall.id", callID),
           ];
-          if (taskLabel) taskAttrs.push(attrString("subagent_name", taskLabel));
+          if (taskSubagentName) taskAttrs.push(attrString("subagent_name", taskSubagentName));
+          else if (taskLabel) taskAttrs.push(attrString("subagent_name", taskLabel));
           const liveTaskSpan = traceShipper.startSpan({
             name: "ai.toolCall",
             parent: spanParent,
@@ -2035,6 +2105,9 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           liveTaskSpan.startTimeUnixNano = startTimeUnixNano;
           const ctx = {
             ids: liveTaskSpan.ids,
+            // F-010 v2: stash subagent_name on the ctx so child session
+            // inherit it before tool.execute.after fires.
+            subagentName: taskSubagentName || void 0,
             eventContext: {
               eventId: state.currentEventId,
               userId: (_c = (_b = state.eventMetadata) == null ? void 0 : _b.userId) != null ? _c : state.sessionId,
@@ -2084,7 +2157,14 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
         const resultMetadata = result.metadata;
         const childSessionId = resultMetadata == null ? void 0 : resultMetadata["sessionId"];
         if (tool === "task" && childSessionId) {
-          mapChildSessionToParent.set(childSessionId, { parentId: sessionID });
+          // KOLYA PATCH (F-010 v2 debug): log what we see so we can verify args.subagent_type
+
+          const _taskSubagentName = extractSubagentNameFromTaskArgs(args);
+
+          mapChildSessionToParent.set(childSessionId, {
+            parentId: sessionID,
+            subagentName: _taskSubagentName || void 0,
+          });
           attachChildSessionToParentTask(childSessionId, sessionID, callID, "tool.execute.after");
         }
         if (startInfo) {

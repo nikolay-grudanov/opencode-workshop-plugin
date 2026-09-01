@@ -297,6 +297,27 @@ function extractSubagentNameFromPrompt(text) {
   if (m) return m[1].trim().slice(0, 120);
   return "";
 }
+// KOLYA PATCH (F-010 v2): see index.js. In OpenCode 1.18 the child's first
+// user message has no identity preamble (system prompt holds it), so we fall
+// back to args.subagent_type stashed by the parent tool.execute.after hook.
+function extractSubagentNameFromTaskArgs(rawArgs) {
+  let args = rawArgs;
+  if (typeof args === "string") {
+    const trimmed = args.trim();
+    if (!trimmed.startsWith("{")) return "";
+    try {
+      args = JSON.parse(trimmed);
+    } catch (_err) {
+      return "";
+    }
+  }
+  if (!args || typeof args !== "object") return "";
+  const st = args.subagent_type;
+  if (typeof st === "string" && st.trim().length > 0 && /^[A-Za-z0-9._\-]{1,64}$/.test(st.trim())) {
+    return st.trim();
+  }
+  return "";
+}
 function buildOtlpSpan(args) {
   const attrs = args.attributes.filter((x) => x !== void 0);
   const span = {
@@ -1224,7 +1245,7 @@ function resolveLocalWorkshopUrl(fileValue) {
 // package.json
 var package_default = {
   name: "@grudanov-nikolay/opencode-workshop-plugin",
-  version: "0.1.0-kolya.9",
+  version: "0.1.0-kolya.10",
   description: "Raindrop observability plugin for OpenCode \u2014 automatic session/event/span tracing",
   type: "module",
   main: "dist/index.js",
@@ -1964,7 +1985,35 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           // once per session; the Subagent root and child LLM spans carry
           // subagent_name so Workshop UI shows the label in the pill.
           if (state.subagentName === void 0) {
-            state.subagentName = extractSubagentNameFromPrompt(textParts.join("\n"));
+            const fromPrompt = extractSubagentNameFromPrompt(textParts.join("\n"));
+            // F-010 v2: chain of fallbacks. Priority:
+            // (1) identity preamble in prompt text
+            // (2) parent's taskContexts (set by tool.execute.before)
+            // (3) mapChildSessionToParent (tool.execute.after may be too late)
+            if (fromPrompt) {
+              state.subagentName = fromPrompt;
+            } else {
+              const parentId = state.parentId;
+              if (parentId) {
+                const runningCalls = runningTaskCallsBySession.get(parentId);
+                if (runningCalls) {
+                  for (const callID of runningCalls) {
+                    const ctx = taskContexts.get(callKey(parentId, callID));
+                    if (ctx && ctx.subagentName) {
+                      state.subagentName = ctx.subagentName;
+                      break;
+                    }
+                  }
+                }
+              }
+              if (!state.subagentName) {
+                const childMap = mapChildSessionToParent.get(sessionID);
+                const fromMap = childMap == null ? void 0 : childMap.subagentName;
+                if (typeof fromMap === "string" && fromMap.length > 0) {
+                  state.subagentName = fromMap;
+                }
+              }
+            }
           }
           state.currentEventId = state.parentEventContext.eventId;
           const subagentRootAttrs = [
@@ -2089,7 +2138,14 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
         const resultMetadata = result.metadata;
         const childSessionId = resultMetadata == null ? void 0 : resultMetadata["sessionId"];
         if (tool === "task" && childSessionId) {
-          mapChildSessionToParent.set(childSessionId, { parentId: sessionID });
+          // KOLYA PATCH (F-010 v2): stash subagent_type from task args so the
+          // child session can recover its display name when its chat.message
+          // parts lack an identity preamble (OpenCode 1.18).
+          const _taskSubagentName = extractSubagentNameFromTaskArgs(args);
+          mapChildSessionToParent.set(childSessionId, {
+            parentId: sessionID,
+            subagentName: _taskSubagentName || void 0,
+          });
           attachChildSessionToParentTask(childSessionId, sessionID, callID, "tool.execute.after");
         }
         if (startInfo) {

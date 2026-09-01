@@ -37,9 +37,48 @@ Three independent paths now populate the attribute: task-args description (fixed
 - [x] Attach `subagent_name` to Subagent root + child LLM spans (both bundles)
 - [x] `node --check` both bundles — pass
 - [x] Unit check: 14/14 (7 prompt cases incl. 3 live DB prompts, 7 args cases) — `/tmp/f010-unit.cjs`
-- [ ] Bump to 0.1.0-kolya.9 + install-local.sh
-- [ ] Live smoke: spawn named sub-agent, verify subagent_name in workshop DB
-- [ ] Commit
+- [x] Bump to 0.1.0-kolya.9 + install-local.sh (commit b2e72da)
+- [x] Live smoke: spawn named sub-agent, verify subagent_name in workshop DB
+- [x] Commit F-010 v1 (450a751)
+
+### F-010 v2 — Recover `subagent_name` for OpenCode 1.18 nested sub-agents (3+ levels)
+
+**Context:** F-010 v1 worked for single-level sub-agents but **silently failed** for nested scenarios in OpenCode 1.18.18 because:
+1. OpenCode 1.18 SDK moved `args` from `toolInput.args` (input) to `_output.args` (output) for `tool.execute.before` — pre-1.18 plugin code was reading from the wrong slot
+2. In 1.18, the child session's first `chat.message` parts contain **only** the user's task text — the identity preamble (`You are research sub-agent. Your task: ...`) lives in the system prompt, which is delivered separately and is NOT in the message parts that reach `chat.message` hook
+4. Therefore `extractSubagentNameFromPrompt` returned `""` for any sub-agent whose user-message didn't happen to contain `You are ...` literally
+5. Also discovered that `tool.execute.after` fires **after** `chat.message` for the child session — so stash-then-read ordering didn't work for sub-agents of sub-agents
+
+**Discovery: 3-level nesting (orchestrator → research → explore) DID work** with the right config (`subagent_depth: 5+` in opencode.jsonc, custom subagent_types via `agent.<name>` block with `mode: "subagent"` and `permission.task: {"*": "allow"}`). What failed was `subagent_name` recovery — spans existed but were unnamed.
+
+**Fix (3 sites, both bundles):**
+1. `tool.execute.before` — read `args` from `_output.args` (SDK 1.18 location, not `toolInput.args`). Stash `subagentName` on the `ctx` object stored in `taskContexts`.
+2. `chat.message` (child session branch) — fallback chain (3 levels): (1) identity preamble parser (legacy), (2) scan parent's `runningTaskCallsBySession` for the matching `callID` and read `ctx.subagentName` from `taskContexts` (NEW — this is the earliest reliable signal because `tool.execute.before` fires before any `chat.message` in the child session), (3) `mapChildSessionToParent` (still useful as a safety net for sub-agents that arrive late).
+3. `attachChildSessionToParentTask` and `applyChildSessionParentToState` — propagate `subagentName` from taskContext into the child session state.
+
+**Verified live (4-level chain: orchestrator → research → file-search → explore, run 63e0c53238518c):**
+- All 3 task tool spans carry `subagent_name` (research / file-search / explore)
+- All 3 Subagent root spans carry `subagent_name`
+- All sub-agent child LLM spans inherit `subagent_name` from their session
+- Coverage 3/3 Subagent, 3/3 task spans
+
+**Todos:**
+- [x] Diagnose: `toolInput.args === undefined` in `tool.execute.before` (SDK 1.18 moved it to `_output.args`)
+- [x] Diagnose: child `chat.message` parts lack identity preamble (system prompt lives elsewhere)
+- [x] Diagnose: `tool.execute.after` fires AFTER child `chat.message` — stash order doesn't work
+- [x] Patch A: `tool.execute.before` reads `_output.args`; stashes `subagentName` on `ctx`
+- [x] Patch B: `chat.message` fallback chain scans parent's `runningTaskCallsBySession` → `taskContexts`
+- [x] Patch C: `tool.execute.after` reads subagentName from taskContext (defensive backup)
+- [x] Patch D: `attachChildSessionToParentTask` + `applyChildSessionParentToState` propagate name
+- [x] Both bundles (`dist/index.js` and `dist/index.cjs`) — lockstep
+- [x] `node --check` both bundles — pass
+- [x] Unit test `extractSubagentNameFromTaskArgs`: 15/15 (object + JSON-string + validity regex)
+- [x] Live smoke: 3-level nesting (orchestrator→research→explore) — subagent_name 2/2 Subagent, 2/2 task
+- [x] Live smoke: 4-level nesting (orchestrator→research→file-search→explore) — subagent_name 3/3 Subagent, 3/3 task
+- [x] Bump to 0.1.0-kolya.10
+- [x] Update static copy `~/.config/opencode/plugins/opencode-workshop-plugin.js`
+- [ ] Commit F-010 v2
+- [ ] Archive `/tmp/f010v2-*.{py,mjs,cjs}` debug scripts
 
 ### F-003 — Attach `subagent_name` to task tool spans so Workshop can label sub-agents
 
