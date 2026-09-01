@@ -1,7 +1,7 @@
 {
   "name": "@grudanov-nikolay/opencode-workshop-plugin",
-  "version": "0.1.0-kolya.6",
-  "description": "Kolya's fork of @raindrop-ai/opencode-plugin. v0.1.0-kolya.3 fixes MCP tool.execute.after crash (upstream issue #21149), verified by A/B smoke test against original 0.0.18 on fff_find_files MCP tool. Drop-in replacement.",
+  "version": "0.1.0-kolya.8",
+  "description": "Kolya's fork of @raindrop-ai/opencode-plugin. v0.1.0-kolya.3 fixes MCP tool.execute.after crash (upstream issue #21149); v0.1.0-kolya.7 attaches subagent_name to OpenCode task tool spans so Workshop UI can label sub-agents; v0.1.0-kolya.8 rebrands log prefix and reported name in plugin metadata so OpenCode no longer prints [raindrop-ai/opencode-plugin] for our fork. Drop-in replacement.",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",

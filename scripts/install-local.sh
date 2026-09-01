@@ -94,7 +94,12 @@ install() {
     exit 1
   fi
   ln -s "$REPO_ROOT" "$CACHE_PKG_LINK"
+  # OpenCode resolves plugin entries as `<pkg>@<version>` and looks for
+  # `<cache>/package.json` at the package root. Without it the plugin is
+  # silently skipped. Copy the repo's package.json (idempotent).
+  cp -f "$PKG_JSON" "$CACHE_PKG_DIR/package.json"
   log "  ✓ symlinked $CACHE_PKG_LINK -> $REPO_ROOT"
+  log "  ✓ copied   $CACHE_PKG_DIR/package.json"
   log ""
   log "Next: ensure your opencode config lists this plugin:"
   log "  ~/.config/opencode/opencode.json:"

@@ -15,6 +15,20 @@
 
 ## Active Features
 
+### F-003 — Attach `subagent_name` to task tool spans so Workshop can label sub-agents
+
+**Context:** Workshop fork (`opencode-workshop`) renders sub-agents from the OpenCode `task` tool. Its UI reads `subagent_name` from span attributes (both the LLM child and the tool span itself). The fork already detects by Pattern 1 (TOOL > LLM > TOOL) and Pattern 3 (tool name `task`), but the label is never populated because the plugin never writes the attribute. Without it, Workshop falls back to "Sub-agent: task 1" / "Sub-agent: task 2" — useless when several sub-agents run in parallel.
+
+**Scope:** Plugin-side metadata only. Reads `args.description` (preferred, up to 120 chars) and falls back to the first 60 chars of `args.prompt`. Both bundles (ESM + CJS) patched in lockstep.
+
+**Todos:**
+- [x] Plan F-003 (this entry)
+- [x] Add `extractTaskLabel(args)` helper next to `attrString`/`attrInt` in both `dist/index.js` and `dist/index.cjs`
+- [x] Patch `tool.execute.before` `task` branch in both bundles — conditional `attrString("subagent_name", taskLabel)` when label is non-empty
+- [x] `node --check dist/index.js && node --check dist/index.cjs` — both pass
+- [ ] Bump version to `0.1.0-kolya.7` (pending; Miko-no-auto-commit)
+- [ ] Smoke-test.sh — manual run with a real `task` invocation (deferred until Kolya's next OpenCode session that uses the task tool)
+
 ### F-002 — Developer experience: readable code, install helper, CI smoke test, file logs
 
 **Context:** Plugin code currently lives only in pre-built `dist/index.js` / `dist/index.cjs` (minified by tsup from upstream's `src/index.ts` which we don't have). For a 1-dev fork that's not blocking, but: (a) every bug fix requires 30 min of reading minified code, (b) local install of a fork requires manual symlink into `~/.cache/opencode/packages/` (discovered 2026-07-09 — no public docs), (c) we have no CI to catch regressions of F-001 fix, (d) `debug: true` in raindrop.json dumps JSON to TUI stdout (pitfall #17). F-002 attacks all four.

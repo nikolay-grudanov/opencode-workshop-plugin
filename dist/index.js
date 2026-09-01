@@ -247,6 +247,19 @@ function attrInt(key, value) {
   if (!Number.isFinite(value)) return void 0;
   return { key, value: { intValue: String(Math.trunc(value)) } };
 }
+// KOLYA PATCH (F-003): derive a human-readable subagent label from the task
+// tool's args. OpenCode's task tool schema accepts { description?, prompt? }.
+// We prefer `description` (the short, user-supplied label) and fall back to
+// the first 60 chars of `prompt` so Workshop can always show *something*.
+// Returns "" when args is not an object or no label can be extracted.
+function extractTaskLabel(rawArgs) {
+  if (!rawArgs || typeof rawArgs !== "object") return "";
+  const desc = rawArgs.description;
+  if (typeof desc === "string" && desc.trim().length > 0) return desc.trim().slice(0, 120);
+  const prompt = rawArgs.prompt;
+  if (typeof prompt === "string" && prompt.trim().length > 0) return prompt.trim().slice(0, 60);
+  return "";
+}
 function buildOtlpSpan(args) {
   const attrs = args.attributes.filter((x) => x !== void 0);
   const span = {
@@ -1173,8 +1186,8 @@ function resolveLocalWorkshopUrl(fileValue) {
 
 // package.json
 var package_default = {
-  name: "@raindrop-ai/opencode-plugin",
-  version: "0.0.18",
+  name: "@grudanov-nikolay/opencode-workshop-plugin",
+  version: "0.1.0-kolya.8",
   description: "Raindrop observability plugin for OpenCode \u2014 automatic session/event/span tracing",
   type: "module",
   main: "dist/index.js",
@@ -1511,7 +1524,7 @@ function getHostname() {
 function createHooks(config, worktree, directory, eventShipper, traceShipper) {
   function log(msg, data) {
     if (!config.debug) return;
-    const prefix = `[raindrop-ai/opencode-plugin] [info] ${msg}`;
+    const prefix = `[kolya-oswp] [info] ${msg}`;
     if (data !== void 0) {
       console.log(prefix, data);
       return;
@@ -1836,7 +1849,7 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           sessions.delete(String(errorSessionID));
         }
       } catch (err) {
-        rateLimitedErrorLog("event", `[raindrop-ai/opencode-plugin] [error] Error in event hook: ${err instanceof Error ? err.message : String(err)}`);
+        rateLimitedErrorLog("event", `[kolya-oswp] [error] Error in event hook: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
     // ------------------------------------------------------------------
@@ -1949,11 +1962,23 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
         if (!spanParent) return;
         const startTimeUnixNano = nowUnixNanoString();
         if (tool === "task") {
+          // KOLYA PATCH (F-003): attach a human-readable label so Workshop UI
+          // can render "Sub-agent: <description>" instead of "task 1". OpenCode's
+          // task tool receives `description` (short, user-supplied) and `prompt`
+          // (full body) — we prefer description and fall back to a 60-char
+          // prompt prefix. Mirrored to the matching branch in tool.execute.after.
+          const taskLabel = extractTaskLabel(toolInput.args);
+          const taskAttrs = [
+            attrString("ai.operationId", "ai.toolCall"),
+            attrString("ai.toolCall.name", tool),
+            attrString("ai.toolCall.id", callID),
+          ];
+          if (taskLabel) taskAttrs.push(attrString("subagent_name", taskLabel));
           const liveTaskSpan = traceShipper.startSpan({
             name: "ai.toolCall",
             parent: spanParent,
             eventId: state.currentEventId,
-            attributes: [attrString("ai.operationId", "ai.toolCall"), attrString("ai.toolCall.name", tool), attrString("ai.toolCall.id", callID)],
+            attributes: taskAttrs,
           });
           liveTaskSpan.startTimeUnixNano = startTimeUnixNano;
           const ctx = {
@@ -1988,7 +2013,7 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           });
         }
       } catch (err) {
-        rateLimitedErrorLog("tool.execute.before", `[raindrop-ai/opencode-plugin] [error] Error in tool.execute.before hook: ${err instanceof Error ? err.message : String(err)}`);
+        rateLimitedErrorLog("tool.execute.before", `[kolya-oswp] [error] Error in tool.execute.before hook: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
     // ------------------------------------------------------------------
@@ -2053,7 +2078,7 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           markTaskCallFinished(sessionID, callID);
         }
       } catch (err) {
-        rateLimitedErrorLog("tool.execute.after", `[raindrop-ai/opencode-plugin] [error] Error in tool.execute.after hook: ${err instanceof Error ? err.message : String(err)}`);
+        rateLimitedErrorLog("tool.execute.after", `[kolya-oswp] [error] Error in tool.execute.after hook: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
     // ------------------------------------------------------------------
@@ -2071,7 +2096,7 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
       } catch (err) {
         rateLimitedErrorLog(
           "experimental.session.compacting",
-          `[raindrop-ai/opencode-plugin] [error] Error in experimental.session.compacting hook: ${err instanceof Error ? err.message : String(err)}`,
+          `[kolya-oswp] [error] Error in experimental.session.compacting hook: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     },
@@ -2096,7 +2121,7 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
       } catch (err) {
         rateLimitedErrorLog(
           "experimental.chat.system.transform",
-          `[raindrop-ai/opencode-plugin] [error] Error in experimental.chat.system.transform hook: ${err instanceof Error ? err.message : String(err)}`,
+          `[kolya-oswp] [error] Error in experimental.chat.system.transform hook: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     },
@@ -2134,7 +2159,7 @@ async function plugin(input) {
     };
   }
   function appLog(level, message) {
-    console.log(`[raindrop-ai/opencode-plugin] [${level}] ${message}`);
+    console.log(`[kolya-oswp] [${level}] ${message}`);
   }
   appLog("info", `Loading ${PLUGIN_NAME} v${PLUGIN_VERSION}`);
   const resolvedLocalUrl = resolveLocalDebuggerBaseUrl(config.localWorkshopUrl);
