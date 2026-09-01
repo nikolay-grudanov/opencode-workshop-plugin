@@ -15,6 +15,32 @@
 
 ## Active Features
 
+### F-010 — Recover `subagent_name` via chat.message parts parsing (live-trace pill fix)
+
+**Context:** Live runs (raindrop_workshop.db, 2026-07-23/24) proved two things. (1) `tool.execute.before` IS invoked for the `task` tool — task spans with `ai.toolCall.args` + result exist — so the earlier "hook not invoked" diagnosis was wrong. (2) Even with the F-003 patch cached before the late runs, `subagent_name` never landed: OpenCode delivers tool args as a JSON *string* in some paths, and `extractTaskLabel` expected an object, silently returning "". The child session's first user message (chat.message parts) IS the task prompt, and identity prompts open with `You are "<name>"` — verified against live DB prompts (`You are "reviewer-primary"`, `team-lead-beta`, …). Numbering follows the cross-repo F-sequence agreed with Kolya (workshop repo F-003 plugin-side continuation).
+
+**Scope (both bundles, lockstep):**
+- `extractTaskLabel`: tolerate JSON-string args (parse when the string starts with `{`)
+- NEW `extractSubagentNameFromPrompt(text)`: parse `You are "name"` / `You are name.` / `name: value` preambles from chat.message text parts (first 400 chars), max 120 chars
+- `chat.message` child-session branch: stash `state.subagentName` once per session; attach `subagent_name` to the `Subagent` root span
+- child LLM spans (both creation paths): attach `subagent_name` when `state.parentId && state.subagentName`
+- `endSpan(Subagent root)`: include `subagent_name` in final attributes
+- `createSessionState`: explicit `subagentName: void 0` field
+
+Three independent paths now populate the attribute: task-args description (fixed parser), task-args prompt fallback, and child-prompt identity parsing. Workshop UI (workshop repo `src/agents.ts`) already reads `subagent_name` from both the tool span and LLM child attrs — no workshop change needed.
+
+**Todos:**
+- [x] Plan F-010 (this entry)
+- [x] Diagnose from live DB: before-hook invoked; args shape mismatch (JSON string vs object)
+- [x] Harden `extractTaskLabel` for JSON-string args (both bundles)
+- [x] Add `extractSubagentNameFromPrompt` + wire into chat.message child branch (both bundles)
+- [x] Attach `subagent_name` to Subagent root + child LLM spans (both bundles)
+- [x] `node --check` both bundles — pass
+- [x] Unit check: 14/14 (7 prompt cases incl. 3 live DB prompts, 7 args cases) — `/tmp/f010-unit.cjs`
+- [ ] Bump to 0.1.0-kolya.9 + install-local.sh
+- [ ] Live smoke: spawn named sub-agent, verify subagent_name in workshop DB
+- [ ] Commit
+
 ### F-003 — Attach `subagent_name` to task tool spans so Workshop can label sub-agents
 
 **Context:** Workshop fork (`opencode-workshop`) renders sub-agents from the OpenCode `task` tool. Its UI reads `subagent_name` from span attributes (both the LLM child and the tool span itself). The fork already detects by Pattern 1 (TOOL > LLM > TOOL) and Pattern 3 (tool name `task`), but the label is never populated because the plugin never writes the attribute. Without it, Workshop falls back to "Sub-agent: task 1" / "Sub-agent: task 2" — useless when several sub-agents run in parallel.

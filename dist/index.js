@@ -253,11 +253,40 @@ function attrInt(key, value) {
 // the first 60 chars of `prompt` so Workshop can always show *something*.
 // Returns "" when args is not an object or no label can be extracted.
 function extractTaskLabel(rawArgs) {
-  if (!rawArgs || typeof rawArgs !== "object") return "";
-  const desc = rawArgs.description;
+  // F-010 hardening: OpenCode can deliver tool args as a JSON *string*
+  // (the after-hook already tolerates this shape via capText2). Parse
+  // before reading, otherwise the description never reaches the span.
+  let args = rawArgs;
+  if (typeof args === "string") {
+    const trimmed = args.trim();
+    if (!trimmed.startsWith("{")) return "";
+    try {
+      args = JSON.parse(trimmed);
+    } catch (_err) {
+      return "";
+    }
+  }
+  if (!args || typeof args !== "object") return "";
+  const desc = args.description;
   if (typeof desc === "string" && desc.trim().length > 0) return desc.trim().slice(0, 120);
-  const prompt = rawArgs.prompt;
+  const prompt = args.prompt;
   if (typeof prompt === "string" && prompt.trim().length > 0) return prompt.trim().slice(0, 60);
+  return "";
+}
+// KOLYA PATCH (F-010): best-effort sub-agent name recovery from the task
+// prompt text (the child session's first user message, i.e. chat.message
+// parts). Recognises identity preambles: 'You are "name"' (quoted),
+// 'You are name.' (bare), or an explicit 'name: value' header. Returns ""
+// when nothing recognisable is found — Workshop then falls back to task N.
+function extractSubagentNameFromPrompt(text) {
+  if (typeof text !== "string" || text.length === 0) return "";
+  const head = text.slice(0, 400);
+  let m = head.match(/you\s+are\s+["\u201c'\u00ab]([^"\u201d'\u00bb]{1,80})["\u201d'\u00bb]/i);
+  if (m) return m[1].trim().slice(0, 120);
+  m = head.match(/you\s+are\s+(?:the\s+|an?\s+)?([A-Za-z0-9][A-Za-z0-9._\- ]{1,60}?)(?:[.,;\n]|\s+that\s)/i);
+  if (m && m[1].trim().split(/\s+/).length <= 6) return m[1].trim().slice(0, 120);
+  m = head.match(/(?:^|\n)\s*["\u201c'\u00ab]?name["\u201d'\u00bb]?\s*[:=]\s*["\u201c'\u00ab]?([A-Za-z0-9][A-Za-z0-9._\- ]{0,60})/i);
+  if (m) return m[1].trim().slice(0, 120);
   return "";
 }
 function buildOtlpSpan(args) {
@@ -1458,6 +1487,7 @@ function createSessionState(sessionId) {
     reasoningParts: /* @__PURE__ */ new Map(),
     toolSpanStarts: /* @__PURE__ */ new Map(),
     processedMessages: /* @__PURE__ */ new Set(),
+    subagentName: void 0,
   };
 }
 function callKey(sessionId, callId) {
@@ -1680,6 +1710,9 @@ type: ${name != null ? name : "UnknownError"}`;
             if (state.currentSystemPrompt) {
               llmAttrs.push(attrString("gen_ai.prompt.0.role", "system"), attrString("gen_ai.prompt.0.content", state.currentSystemPrompt));
             }
+            if (state.parentId && state.subagentName) {
+              llmAttrs.push(attrString("subagent_name", state.subagentName));
+            }
             const llmParent = state.parentId && state.parentTaskSpanIds ? state.parentTaskSpanIds : state.currentRootSpan.ids;
             const llmSpan = traceShipper.startSpan({
               name: modelName,
@@ -1716,6 +1749,9 @@ type: ${name != null ? name : "UnknownError"}`;
             if (state.currentSystemPrompt) {
               llmAttrs.push(attrString("gen_ai.prompt.0.role", "system"), attrString("gen_ai.prompt.0.content", state.currentSystemPrompt));
             }
+            if (state.parentId && state.subagentName) {
+              llmAttrs.push(attrString("subagent_name", state.subagentName));
+            }
             if (!state.parentTaskSpanIds) {
               traceShipper.endSpan(rootSpan, {
                 error: "Missing strict parent task for child session",
@@ -1736,7 +1772,11 @@ type: ${name != null ? name : "UnknownError"}`;
             }
             traceShipper.endSpan(finalLlmSpan, { error: errorForSpan });
             traceShipper.endSpan(rootSpan, {
-              attributes: [attrString("is_subagent", "true"), attrString("parent_session_id", state.parentId)],
+              attributes: [
+                attrString("is_subagent", "true"),
+                attrString("parent_session_id", state.parentId),
+                ...(state.subagentName ? [attrString("subagent_name", state.subagentName)] : []),
+              ],
               error: errorForSpan,
             });
           } else {
@@ -1908,19 +1948,31 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
           if (!state.parentTaskSpanIds || !state.parentEventContext) {
             return;
           }
+          // KOLYA PATCH (F-010): recover the sub-agent display name by parsing
+          // the chat.message parts. The child session's first user message IS
+          // the task prompt; identity prompts open with 'You are "<name>"'.
+          // This is the fallback path when the task tool's `description` never
+          // reaches the hook (OpenCode 1.17+/1.18 args-shape quirk). Stashed
+          // once per session; the Subagent root and child LLM spans carry
+          // subagent_name so Workshop UI shows the label in the pill.
+          if (state.subagentName === void 0) {
+            state.subagentName = extractSubagentNameFromPrompt(textParts.join("\n"));
+          }
           state.currentEventId = state.parentEventContext.eventId;
+          const subagentRootAttrs = [
+            attrString("workspace", worktree),
+            attrString("directory", directory),
+            attrString("hostname", hostname),
+            attrString("os", os),
+            attrString("is_subagent", "true"),
+            attrString("parent_session_id", state.parentId),
+          ];
+          if (state.subagentName) subagentRootAttrs.push(attrString("subagent_name", state.subagentName));
           state.currentRootSpan = traceShipper.startSpan({
             name: "Subagent",
             parent: state.parentTaskSpanIds,
             eventId: state.currentEventId,
-            attributes: [
-              attrString("workspace", worktree),
-              attrString("directory", directory),
-              attrString("hostname", hostname),
-              attrString("os", os),
-              attrString("is_subagent", "true"),
-              attrString("parent_session_id", state.parentId),
-            ],
+            attributes: subagentRootAttrs,
           });
           return;
         }
