@@ -1240,7 +1240,7 @@ function resolveLocalWorkshopUrl(fileValue) {
 // package.json
 var package_default = {
   name: "@grudanov-nikolay/opencode-workshop-plugin",
-  version: "0.1.0-kolya.10",
+  version: "0.1.0-kolya.11",
   description: "Raindrop observability plugin for OpenCode \u2014 automatic session/event/span tracing",
   type: "module",
   main: "dist/index.js",
@@ -2185,9 +2185,21 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
             resultOutput = "(no output)";
           }
           const toolResult = boundedStringify(resultOutput);
+          // F-013: propagate error status from the SDK's tool result so F-012's
+          // error-count metrics are honest. We accept two shapes: (a) OpenCode's
+          // native {error: {name, message, data}} when the tool threw, and
+          // (b) a top-level `result.error` string for forward-compat.
+          const toolError = (() => {
+            if (!result || typeof result !== "object") return void 0;
+            const rErr = (result).error;
+            if (rErr && typeof rErr === "object" && typeof rErr.message === "string") return rErr.message;
+            if (typeof rErr === "string" && rErr.length > 0) return rErr;
+            return void 0;
+          })();
           if (startInfo.liveSpan) {
             traceShipper.endSpan(startInfo.liveSpan, {
               attributes: [attrString("ai.toolCall.args", toolCallArgs), attrString("ai.toolCall.result", toolResult)],
+              ...(toolError ? { error: toolError } : {}),
             });
           } else {
             traceShipper.createSpan({
@@ -2203,6 +2215,7 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
                 attrString("ai.toolCall.args", toolCallArgs),
                 attrString("ai.toolCall.result", toolResult),
               ],
+              ...(toolError ? { error: toolError } : {}),
             });
           }
         }
