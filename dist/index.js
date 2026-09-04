@@ -362,7 +362,17 @@ function readWorkshopEnv() {
   if (raw === void 0) return void 0;
   const trimmed = raw.trim();
   if (trimmed.length === 0) return void 0;
-  if (/^https?:\/\//i.test(trimmed)) return { url: trimmed };
+  if (/^https?:\/\//i.test(trimmed)) {
+    // KOLYA PATCH (F-005): same precedence guard as resolveLocalWorkshopUrl.
+    // If user sets RAINDROP_WORKSHOP=https://stale.example.com/v1/, fall
+    // back to auto-detection rather than silently mirroring to a non-local
+    // host.
+    if (!isLocalUrl(trimmed)) {
+      rateLimitedLog("workshop_env_non_local", () => console.warn(`[kolya-oswp] [warn] RAINDROP_WORKSHOP=${trimmed} is not a local URL; ignoring. Set local_workshop_url in raindrop.json if you really want a custom URL.`));
+      return void 0;
+    }
+    return { url: trimmed };
+  }
   if (/^(1|true|yes|on)$/i.test(trimmed)) return "enable";
   if (/^(0|false|no|off)$/i.test(trimmed)) return "disable";
   return void 0;
@@ -372,6 +382,19 @@ function isLocalDevHost(hostname) {
   if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname === "::1") {
     return true;
   }
+  if (hostname.endsWith(".localhost")) return true;
+  return false;
+}
+// KOLYA PATCH (F-005): URL-level local-host check used by env-var precedence.
+// Accepts the same loopback forms as isLocalDevHost plus the IPv4-mapped IPv6
+// loopback (::ffff:127.0.0.1) some Node versions report when binding 127.0.0.1.
+// Used to drop stale or misconfigured RAINDROP_LOCAL_WORKSHOP_URL env vars.
+function isLocalUrl(value) {
+  if (typeof value !== "string" || value.length === 0) return false;
+  let hostname;
+  try { hostname = new URL(value).hostname.toLowerCase(); } catch (_e) { return false; }
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname === "::1") return true;
+  if (hostname === "[::1]" || hostname.startsWith("::ffff:127.") || hostname.startsWith("::ffff:7f00:1")) return true;
   if (hostname.endsWith(".localhost")) return true;
   return false;
 }
@@ -1232,6 +1255,15 @@ function resolveLocalWorkshopUrl(fileValue) {
     if (envValue === "" || envValue.toLowerCase() === "null" || envValue.toLowerCase() === "false") {
       return null;
     }
+    // KOLYA PATCH (F-005): guard against stale/non-local env values that
+    // would otherwise silently override a correct raindrop.json. Falls back
+    // to fileValue (or auto-detect default if fileValue is empty) with a
+    // rate-limited warning so the user notices the misconfiguration in
+    // trace.log without log spam.
+    if (!isLocalUrl(envValue)) {
+      rateLimitedLog("local_workshop_url_non_local", () => console.warn(`[kolya-oswp] [warn] RAINDROP_LOCAL_WORKSHOP_URL=${envValue} is not a local URL; falling back to raindrop.json (or auto-detect). If this is intentional, set local_workshop_url in raindrop.json too.`));
+      return fileValue || DEFAULT_LOCAL_WORKSHOP_URL;
+    }
     return envValue;
   }
   return fileValue;
@@ -1240,7 +1272,7 @@ function resolveLocalWorkshopUrl(fileValue) {
 // package.json
 var package_default = {
   name: "@grudanov-nikolay/opencode-workshop-plugin",
-  version: "0.1.0-kolya.11",
+  version: "0.1.0-kolya.12",
   description: "Raindrop observability plugin for OpenCode \u2014 automatic session/event/span tracing",
   type: "module",
   main: "dist/index.js",

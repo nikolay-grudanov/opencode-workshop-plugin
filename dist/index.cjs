@@ -367,7 +367,14 @@ function readWorkshopEnv() {
   if (raw === void 0) return void 0;
   const trimmed = raw.trim();
   if (trimmed.length === 0) return void 0;
-  if (/^https?:\/\//i.test(trimmed)) return { url: trimmed };
+  if (/^https?:\/\//i.test(trimmed)) {
+    // KOLYA PATCH (F-005): same precedence guard.
+    if (!isLocalUrl(trimmed)) {
+      rateLimitedLog("workshop_env_non_local", () => console.warn(`[kolya-oswp] [warn] RAINDROP_WORKSHOP=${trimmed} is not a local URL; ignoring.`));
+      return void 0;
+    }
+    return { url: trimmed };
+  }
   if (/^(1|true|yes|on)$/i.test(trimmed)) return "enable";
   if (/^(0|false|no|off)$/i.test(trimmed)) return "disable";
   return void 0;
@@ -377,6 +384,16 @@ function isLocalDevHost(hostname) {
   if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname === "::1") {
     return true;
   }
+  if (hostname.endsWith(".localhost")) return true;
+  return false;
+}
+// KOLYA PATCH (F-005): URL-level local-host check used by env-var precedence.
+function isLocalUrl(value) {
+  if (typeof value !== "string" || value.length === 0) return false;
+  let hostname;
+  try { hostname = new URL(value).hostname.toLowerCase(); } catch (_e) { return false; }
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname === "::1") return true;
+  if (hostname === "[::1]" || hostname.startsWith("::ffff:127.") || hostname.startsWith("::ffff:7f00:1")) return true;
   if (hostname.endsWith(".localhost")) return true;
   return false;
 }
@@ -1237,6 +1254,11 @@ function resolveLocalWorkshopUrl(fileValue) {
     if (envValue === "" || envValue.toLowerCase() === "null" || envValue.toLowerCase() === "false") {
       return null;
     }
+    // KOLYA PATCH (F-005): non-local env guard + rate-limited warning.
+    if (!isLocalUrl(envValue)) {
+      rateLimitedLog("local_workshop_url_non_local", () => console.warn(`[kolya-oswp] [warn] RAINDROP_LOCAL_WORKSHOP_URL=${envValue} is not a local URL; falling back to raindrop.json (or auto-detect).`));
+      return fileValue || DEFAULT_LOCAL_WORKSHOP_URL;
+    }
     return envValue;
   }
   return fileValue;
@@ -1245,7 +1267,7 @@ function resolveLocalWorkshopUrl(fileValue) {
 // package.json
 var package_default = {
   name: "@grudanov-nikolay/opencode-workshop-plugin",
-  version: "0.1.0-kolya.11",
+  version: "0.1.0-kolya.12",
   description: "Raindrop observability plugin for OpenCode \u2014 automatic session/event/span tracing",
   type: "module",
   main: "dist/index.js",

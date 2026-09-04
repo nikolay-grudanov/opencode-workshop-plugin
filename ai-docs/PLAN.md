@@ -15,6 +15,41 @@
 
 ## Active Features
 
+### F-005 — `RAINDROP_LOCAL_WORKSHOP_URL` env-var precedence fix (fall back to file if env value is non-local)
+
+**Context:** Real bug, already bitten us 2026-06-30 (lost spans for 2 hours). `resolveLocalWorkshopUrl()` in `dist/index.{js,cjs}` unconditionally returns `process.env["RAINDROP_LOCAL_WORKSHOP_URL"]` when set, regardless of whether the value points at a reachable local daemon. Stale `~/.bashrc` exports or copy-pasted values override a correct `raindrop.json` `local_workshop_url` silently — the plugin happily POSTs spans to a non-existent host and Workshop shows zero new runs. The user discovers the issue only when they wonder "why aren't my traces showing up?".
+
+**Scope:** Pure hardening. No new env vars, no behaviour change for users who only use one channel. Both bundles (ESM + CJS) patched in lockstep.
+
+**Plan:**
+- New helper `isLocalUrl(value)` next to `isLocalDevHost` — accepts `localhost`, `127.0.0.1`, `0.0.0.0`, `[::1]`, and `[::ffff:127.0.0.1]` (the IPv4-mapped IPv6 form some Node versions report for loopback)
+- `resolveLocalWorkshopUrl(fileValue)`:
+  - If env value is unset, return `fileValue`
+  - If env value is `""`/`"null"`/`"false"` (case-insensitive), return `null` (unchanged — explicit opt-out)
+  - If env value is a local URL, return it (unchanged — happy path)
+  - If env value is non-local, fall back to `fileValue` AND emit a single `rateLimitedLog` warning ("`RAINDROP_LOCAL_WORKSHOP_URL=<value>` is not a local URL; falling back to raindrop.json. If this is intentional, set the file value too.")
+- `readWorkshopEnv()` for `RAINDROP_WORKSHOP` (the umbrella env var) — same guard for the URL form
+
+**Verified via unit check (5 cases):**
+- env unset → returns `fileValue`
+- env=`""` → returns `null` (opt-out respected)
+- env=`"null"` → returns `null`
+- env=`"http://localhost:5899/v1/"` → returns env (local URL)
+- env=`"https://stale.example.com/v1/"` → returns `fileValue` + warning logged
+
+**Live verification:** start daemon with `RAINDROP_LOCAL_WORKSHOP_URL=https://non-local.test/v1/` set in env, plugin should still send to `http://localhost:5899/v1/` from raindrop.json. Debug log shows the warning once per 30 s.
+
+**Todos:**
+- [x] Plan F-005 (this entry)
+- [x] Add `isLocalUrl(value)` helper next to `isLocalDevHost` in both bundles
+- [x] Patch `resolveLocalWorkshopUrl` to fall back to fileValue (or `DEFAULT_LOCAL_WORKSHOP_URL` if fileValue empty) on non-local env value (both bundles)
+- [x] Patch `readWorkshopEnv` URL branch with same guard
+- [x] Add `rateLimitedLog` warning (re-use existing `RATE_LIMITED_LOG_INTERVAL_MS = 30s`)
+- [x] Static unit check: 16/16 cases pass on both bundles (via `/tmp/f005-unit.mjs` extracting helpers from real bundle + isolated VM test)
+- [x] Bump version to `0.1.0-kolya.12`
+- [x] Live test: `RAINDROP_LOCAL_WORKSHOP_URL=https://stale.example.com/v1/` + no `raindrop.json` → plugin falls back to `DEFAULT_LOCAL_WORKSHOP_URL=http://localhost:5899/v1/`; spans land in Workshop; warning logged to trace.log
+- [ ] Commit F-005 (pending below)
+
 ### F-013 — Propagate `result.error` into `endSpan`/`createSpan` so spans get `status=ERROR`
 
 **Context:** Before F-013, every span in Workshop UI landed with `status=UNSET` even when the underlying tool call had failed. The OpenCode SDK exposes errors via `result.error` on the `tool.execute.after` hook, but our plugin (inherited from upstream `@raindrop-ai/opencode-plugin@0.0.18`) ignored it — `endSpan()` only sets `status=ERROR` when the caller passes `extra.error`, and our `tool.execute.after` never did. Additionally, ~52% of spans had no `end_time_ms` populated historically (F-012 review surfaced this). The F-012 Statistics panel's error_count was therefore lying.
