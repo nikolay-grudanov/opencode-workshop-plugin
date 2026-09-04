@@ -13,6 +13,16 @@
 
 ---
 
+## Roadmap (Tier 1, next-up) — 2026-09-04
+
+After F-005/F-010 v2/F-013/F-003 closed 2026-09-04. Detailed spec: `ai-docs/specs/F-011-loadconfig-cwd-bug.md`. Small bug fix, 1-2 hours.
+
+- **T1-B. Bug: `loadConfig()` cwd vs project root mismatch** — `raindrop.json` placed in cwd or workdir is ignored because `loadConfig()` only checks `~/.config/opencode/raindrop.json` and `<input.directory>/.opencode/raindrop.json`. Affects multi-project isolation (the per-`eventName` partitioning that F-007 in workshop depends on).
+
+Handoff for a future session that picks this up: `HANDOFF-NEXT-SESSION.md`.
+
+---
+
 ## Active Features
 
 ### F-005 — `RAINDROP_LOCAL_WORKSHOP_URL` env-var precedence fix (fall back to file if env value is non-local)
