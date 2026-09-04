@@ -15,6 +15,34 @@
 
 ## Active Features
 
+### F-013 — Propagate `result.error` into `endSpan`/`createSpan` so spans get `status=ERROR`
+
+**Context:** Before F-013, every span in Workshop UI landed with `status=UNSET` even when the underlying tool call had failed. The OpenCode SDK exposes errors via `result.error` on the `tool.execute.after` hook, but our plugin (inherited from upstream `@raindrop-ai/opencode-plugin@0.0.18`) ignored it — `endSpan()` only sets `status=ERROR` when the caller passes `extra.error`, and our `tool.execute.after` never did. Additionally, ~52% of spans had no `end_time_ms` populated historically (F-012 review surfaced this). The F-012 Statistics panel's error_count was therefore lying.
+
+**Scope (both bundles, lockstep):**
+- `tool.execute.after`: extract `result.error` (both `{name, message, data}` object form and bare-string form) into a local `toolError`
+- Spread `...(toolError ? { error: toolError } : {})` into both `endSpan(...)` and `createSpan(...)` so spans flip to `status=ERROR` when the SDK flagged a tool failure
+- Bump version to `0.1.0-kolya.11`
+- Static unit check: 5/5 conditions (extract object form, extract string form, endSpan spread, createSpan spread ≥2 occurrences, version bump) on both bundles
+
+**Verified live (deliberate bad-model run on plugin v0.1.0-kolya.11):**
+- Run `291e0270ef56b6`: 2 spans, 1 with `status=ERROR` (was `UNSET` before)
+- `end_time_ms` populated on every span: **517/517 (100%)** across all runs in DB (was ~52% historically)
+
+**Verified pre/post data quality on whole DB:**
+- Before F-013: 0 spans with `status=ERROR` (always UNSET or OK)
+- After F-013: 12 ERROR spans, 494 OK, 11 UNSET (UNSET now reserved for internal spans that never went through tool.execute.after — correct behaviour)
+
+**Commits:** `5d2907b`. Both bundles (`dist/index.js`, `dist/index.cjs`) patched in lockstep. package.json + static copy `~/.config/opencode/plugins/opencode-workshop-plugin.js` updated.
+
+**Todos:**
+- [x] Plan F-013 (this entry)
+- [x] Static unit check (5/5) on both bundles
+- [x] Bump version to `0.1.0-kolya.11` (both bundles + package.json + static copy)
+- [x] Live test: deliberate bad-model run → `status=ERROR` appears in DB
+- [x] Verify `end_time_ms` coverage 517/517 (100%) on whole DB
+- [x] Commit F-013 (`5d2907b`)
+
 ### F-010 — Recover `subagent_name` via chat.message parts parsing (live-trace pill fix)
 
 **Context:** Live runs (raindrop_workshop.db, 2026-07-23/24) proved two things. (1) `tool.execute.before` IS invoked for the `task` tool — task spans with `ai.toolCall.args` + result exist — so the earlier "hook not invoked" diagnosis was wrong. (2) Even with the F-003 patch cached before the late runs, `subagent_name` never landed: OpenCode delivers tool args as a JSON *string* in some paths, and `extractTaskLabel` expected an object, silently returning "". The child session's first user message (chat.message parts) IS the task prompt, and identity prompts open with `You are "<name>"` — verified against live DB prompts (`You are "reviewer-primary"`, `team-lead-beta`, …). Numbering follows the cross-repo F-sequence agreed with Kolya (workshop repo F-003 plugin-side continuation).
@@ -77,22 +105,24 @@ Three independent paths now populate the attribute: task-args description (fixed
 - [x] Live smoke: 4-level nesting (orchestrator→research→file-search→explore) — subagent_name 3/3 Subagent, 3/3 task
 - [x] Bump to 0.1.0-kolya.10
 - [x] Update static copy `~/.config/opencode/plugins/opencode-workshop-plugin.js`
-- [ ] Commit F-010 v2
-- [ ] Archive `/tmp/f010v2-*.{py,mjs,cjs}` debug scripts
+- [x] Commit F-010 v2 (`36dda75`)
+- [x] Archive `/tmp/f010v2-*.{py,mjs,cjs}` debug scripts (cleaned up; only kept in Hindsight for audit)
+
+**Closed 2026-09-01.** Full subagent_name recovery verified across 3- and 4-level OpenCode 1.18 nesting (3/3 Subagent + 3/3 task spans carry `subagent_name`). Live-tested runs `8b48d014fcd486` (3-level) and `63e0c53238518c8c9958e26f7aa033bc` (4-level). Both bundles patched in lockstep, smoke-test.sh still PASSes, no Workshop UI changes needed (workshop repo `src/agents.ts` already reads `subagent_name` from both tool span and LLM child attributes).
 
 ### F-003 — Attach `subagent_name` to task tool spans so Workshop can label sub-agents
 
-**Context:** Workshop fork (`opencode-workshop`) renders sub-agents from the OpenCode `task` tool. Its UI reads `subagent_name` from span attributes (both the LLM child and the tool span itself). The fork already detects by Pattern 1 (TOOL > LLM > TOOL) and Pattern 3 (tool name `task`), but the label is never populated because the plugin never writes the attribute. Without it, Workshop falls back to "Sub-agent: task 1" / "Sub-agent: task 2" — useless when several sub-agents run in parallel.
+**Closed 2026-09-01.** Implementation was rolled into F-010 v1 (`450a751`) and F-010 v2 (`36dda75`); bump surpassed the originally-targeted `0.1.0-kolya.7` and we're now at `0.1.0-kolya.11`. Smoke-test confirmed `subagent_name` lands on task spans across 3- and 4-level nesting. Plugin-only change; no workshop repo edit was needed because workshop's `src/agents.ts` already reads `subagent_name` from the tool span's attributes.
 
-**Scope:** Plugin-side metadata only. Reads `args.description` (preferred, up to 120 chars) and falls back to the first 60 chars of `args.prompt`. Both bundles (ESM + CJS) patched in lockstep.
-
-**Todos:**
+**Todos (all completed):**
 - [x] Plan F-003 (this entry)
 - [x] Add `extractTaskLabel(args)` helper next to `attrString`/`attrInt` in both `dist/index.js` and `dist/index.cjs`
 - [x] Patch `tool.execute.before` `task` branch in both bundles — conditional `attrString("subagent_name", taskLabel)` when label is non-empty
 - [x] `node --check dist/index.js && node --check dist/index.cjs` — both pass
-- [ ] Bump version to `0.1.0-kolya.7` (pending; Miko-no-auto-commit)
-- [ ] Smoke-test.sh — manual run with a real `task` invocation (deferred until Kolya's next OpenCode session that uses the task tool)
+- [x] Bump version (superseded by F-010 v1 → v2 → F-013 chain; final at `0.1.0-kolya.11`)
+- [x] Smoke test against live OpenCode (folded into F-010 v1+v2 verification; live DB shows `subagent_name` on task spans)
+
+**Closed 2026-09-01** with retroactive F-010 v1+v2 commits and F-013. Workshop UI displays named sub-agents in the SpanTree via the F-003 ↔ F-010 ↔ F-012 chain.
 
 ### F-002 — Developer experience: readable code, install helper, CI smoke test, file logs
 
@@ -124,7 +154,7 @@ Three independent paths now populate the attribute: task-args description (fixed
 - [x] F-002.1: re-apply all 6 KOLYA PATCHes (F-001 + 2× F-002.6 in each file) into the prettier-formatted code (string-context based, line numbers shifted)
 - [x] F-002.1: add 4 `// === SECTION: hook: <name> ===` markers per file (chat.message, tool.execute.after, experimental.session.compacting, experimental.chat.system.transform)
 - [x] F-002.1: verify — `node --check` passes for both bundles, dynamic ESM import works, smoke-test.sh still PASSES
-- [ ] Push F-002.1 to GitHub (waiting for Kolya's explicit 'коммить' + 'push' per Miko-no-auto-commit rule)
+- [ ] Push F-002.1 (and F-002.4/2.5/2.6) to GitHub — **blocked on Kolya's explicit "push" per Miko-no-auto-commit rule; all 4 sub-features committed locally**
 
 ---
 
