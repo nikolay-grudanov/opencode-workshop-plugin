@@ -1216,7 +1216,13 @@ import { join } from "path";
 function loadConfig(projectDirectory) {
   var _a, _b, _c, _d, _e, _f, _g, _h;
   let merged = {};
-  const configPaths = [join(homedir(), ".config", "opencode", "raindrop.json"), join(projectDirectory, ".opencode", "raindrop.json")];
+  const configPaths = [
+    join(homedir(), ".config", "opencode", "raindrop.json"),
+    join(projectDirectory, ".opencode", "raindrop.json"),
+    join(projectDirectory, "raindrop.json"),
+    join(process.cwd(), ".opencode", "raindrop.json"),
+    join(process.cwd(), "raindrop.json")
+  ];
   for (const configPath of configPaths) {
     try {
       if (existsSync(configPath)) {
@@ -1237,7 +1243,7 @@ function loadConfig(projectDirectory) {
     writeKey: (_b = (_a = process.env["RAINDROP_WRITE_KEY"]) != null ? _a : merged.write_key) != null ? _b : "",
     endpoint: (_d = (_c = process.env["RAINDROP_API_URL"]) != null ? _c : merged.api_url) != null ? _d : "https://api.raindrop.ai/v1",
     projectId: (_e = process.env["RAINDROP_PROJECT_ID"]) != null ? _e : merged.project_id,
-    eventName: (_f = merged.event_name) != null ? _f : "opencode_session",
+    eventName: (_f = merged.event_name ?? merged.eventName) != null ? _f : "opencode_session",
     debug: process.env["RAINDROP_DEBUG"] === "true" ? true : (_g = merged.debug) != null ? _g : false,
     captureSystemPrompt: process.env["RAINDROP_CAPTURE_SYSTEM_PROMPT"] !== void 0 ? process.env["RAINDROP_CAPTURE_SYSTEM_PROMPT"] === "true" : (_h = merged.capture_system_prompt) != null ? _h : false,
     eventMetadata,
@@ -1272,7 +1278,7 @@ function resolveLocalWorkshopUrl(fileValue) {
 // package.json
 var package_default = {
   name: "@grudanov-nikolay/opencode-workshop-plugin",
-  version: "0.1.0-kolya.12",
+  version: "0.1.0-kolya.13",
   description: "Raindrop observability plugin for OpenCode \u2014 automatic session/event/span tracing",
   type: "module",
   main: "dist/index.js",
