@@ -737,6 +737,7 @@ var EventShipper = class {
       properties: {
         ...restProperties,
         ...(wizardSession ? { "raindrop.wizardSession": wizardSession } : {}),
+        ...(this.gitContext && (this.gitContext.project || this.gitContext.branch || this.gitContext.commit) ? { git: this.gitContext } : {}),
         $context: this.context,
       },
       attachments: accumulated.attachments,
@@ -1273,7 +1274,7 @@ function resolveLocalWorkshopUrl(fileValue) {
 // package.json
 var package_default = {
   name: "@grudanov-nikolay/opencode-workshop-plugin",
-  version: "0.1.0-kolya.13",
+  version: "0.1.0-kolya.14",
   description: "Raindrop observability plugin for OpenCode \u2014 automatic session/event/span tracing",
   type: "module",
   main: "dist/index.js",
@@ -1345,6 +1346,7 @@ var EventShipper2 = class extends EventShipper {
       libraryVersion: (_c = opts.libraryVersion) != null ? _c : PLUGIN_VERSION,
       defaultEventName: (_d = opts.defaultEventName) != null ? _d : "opencode_session",
     });
+    this.gitContext = opts.gitContext ?? null;
   }
 };
 var TraceShipper2 = class extends TraceShipper {
@@ -2280,6 +2282,30 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
 }
 
 // src/index.ts
+// F-014 (LABEL_FOURTEEN_PLACEHOLDER): capture project / branch / commit
+// metadata once at plugin startup so each run can be tagged with the working
+// tree state. Failures are tolerated: this is best-effort context, not a
+// correctness path. Runs outside a git worktree return nulls.
+function collectGitContext(worktreePath) {
+  if (!worktreePath) return { project: null, branch: null, commit: null };
+  const cp = require("node:child_process");
+  const pathModule = require("node:path");
+  const safe = (args) => {
+    try {
+      return cp.execFileSync("git", args, { cwd: worktreePath, encoding: "utf8", timeout: 1500, stdio: ["ignore", "pipe", "ignore"] }).trim();
+    } catch (e) {
+      return null;
+    }
+  };
+  const commit = safe(["rev-parse", "HEAD"]);
+  const branch = safe(["rev-parse", "--abbrev-ref", "HEAD"]);
+  const toplevel = safe(["rev-parse", "--show-toplevel"]);
+  return {
+    project: toplevel ? pathModule.basename(toplevel) : null,
+    branch: branch && branch !== "HEAD" ? branch : null,
+    commit,
+  };
+}
 async function plugin(input) {
   var _a;
   const config = loadConfig(input.directory);
@@ -2326,12 +2352,15 @@ async function plugin(input) {
     const destinations = [config.writeKey ? `cloud (${config.endpoint})` : null, resolvedLocalUrl ? `local Workshop (${resolvedLocalUrl})` : null].filter(Boolean);
     appLog("info", `Raindrop tracing enabled \u2014 destinations: ${destinations.join(", ")}`);
   }
+  const worktree = (_a = input.worktree) != null ? _a : input.directory;
+  const gitContext = collectGitContext(worktree);
   const eventShipper = new EventShipper2({
     writeKey: config.writeKey,
     endpoint: config.endpoint,
     debug: config.debug,
     projectId: config.projectId,
     localDebuggerUrl: config.localWorkshopUrl,
+    gitContext,
   });
   const traceShipper = new TraceShipper2({
     writeKey: config.writeKey,
@@ -2340,7 +2369,6 @@ async function plugin(input) {
     projectId: config.projectId,
     localDebuggerUrl: config.localWorkshopUrl,
   });
-  const worktree = (_a = input.worktree) != null ? _a : input.directory;
   const hooks = createHooks(config, worktree, input.directory, eventShipper, traceShipper);
   return hooks;
 }
