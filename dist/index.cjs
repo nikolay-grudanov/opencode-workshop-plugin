@@ -1274,7 +1274,7 @@ function resolveLocalWorkshopUrl(fileValue) {
 // package.json
 var package_default = {
   name: "@grudanov-nikolay/opencode-workshop-plugin",
-  version: "0.1.0-kolya.14",
+  version: "0.1.0-kolya.15",
   description: "Raindrop observability plugin for OpenCode \u2014 automatic session/event/span tracing",
   type: "module",
   main: "dist/index.js",
@@ -1610,7 +1610,7 @@ function getHostname() {
     return h;
   }
 }
-function createHooks(config, worktree, directory, eventShipper, traceShipper) {
+function createHooks(config, worktree, directory, eventShipper, traceShipper, resolvedLocalUrl, sidepanelMode) {
   function log(msg, data) {
     if (!config.debug) return;
     const prefix = `[kolya-oswp] [info] ${msg}`;
@@ -2259,6 +2259,20 @@ type: ${errorName != null ? errorName : "UnknownError"}`;
 // === SECTION: hook: experimental.chat.system.transform ===
     "experimental.chat.system.transform": async (input, output) => {
       try {
+        // F-006 sidepanel: prepend a short role/MCP block so the agent
+        // understands the Workshop sidepanel context. Only when sidepanelMode.
+        if (sidepanelMode) {
+          const runId = process.env.RAINDROP_SIDEPANEL_RUN_ID || "<none>";
+          output.system = [
+            [
+              "You are the assistant in the Raindrop Workshop sidepanel — the local trace debugger for AI agents.",
+              `Local Workshop MCP server is configured as 'workshop'. Use its tools (workshop__get_current_run, workshop__get_run_outline, workshop__query_traces, workshop__search_run, workshop__get_span_payload, workshop__get_span_context, workshop__annotate, workshop__replay_run, workshop__show_in_ui, workshop__ask_agent) when the user references the focused run, this trace, the current screen, or a captured span.`,
+              `Currently focused Workshop run: ${runId}. Treat the user's first message as the in-flight request, not as a context reset.`,
+              `Reply in the user's language.`,
+            ].join("\n"),
+            ...output.system,
+          ];
+        }
         if (!config.captureSystemPrompt) return;
         const sessionID = input.sessionID;
         if (!sessionID) return;
@@ -2369,6 +2383,66 @@ async function plugin(input) {
     projectId: config.projectId,
     localDebuggerUrl: config.localWorkshopUrl,
   });
-  const hooks = createHooks(config, worktree, input.directory, eventShipper, traceShipper);
+  // === KOLYA PATCH (F-006): sidepanel bootstrap =============================
+  // When the local Workshop daemon is the destination and the Workshop chat
+  // bridge signals a sidepanel session in flight (RAINDROP_SIDEPANEL_ACTIVE=1,
+  // RAINDROP_SIDEPANEL_RUN_ID=<id>), write a small config dir to
+  // ~/.cache/workshop-sidepanel/<pid>-<ts> containing opencode.json (which
+  // registers the `workshop` stdio MCP server) and export it as
+  // OPENCODE_CONFIG_DIR so the spawning opencode process picks it up.
+  // Sidepanel system prompt is injected via experimental.chat.system.transform
+  // (see above). All errors are silent — bootstrap is best-effort.
+  const sidepanelMode = hasLocalDestination && process.env.RAINDROP_SIDEPANEL_ACTIVE === "1";
+  let workshopConfigDir = null;
+  if (sidepanelMode) {
+    appLog("info", `sidepanel bootstrap: run_id=${process.env.RAINDROP_SIDEPANEL_RUN_ID || ""}`);
+    try {
+      const os = require("node:os");
+      const fs = require("node:fs");
+      const path = require("node:path");
+      const cacheRoot = path.join(os.homedir(), ".cache", "workshop-sidepanel");
+      try { fs.mkdirSync(cacheRoot, { recursive: true }); } catch {}
+      try {
+        const now = Date.now();
+        for (const entry of fs.readdirSync(cacheRoot)) {
+          try {
+            const st = fs.statSync(path.join(cacheRoot, entry));
+            if (now - st.mtimeMs > 60 * 60 * 1000) fs.rmSync(path.join(cacheRoot, entry), { recursive: true, force: true });
+          } catch {}
+        }
+      } catch {}
+      const dir = path.join(cacheRoot, `${process.pid}-${Date.now()}`);
+      fs.mkdirSync(dir, { recursive: true });
+      const isCompiled = (process.execPath || "").toLowerCase().endsWith("raindrop");
+      const command = isCompiled
+        ? [process.execPath, "workshop", "mcp"]
+        : ["bun", "/home/gna/workspase/projects/opencode-workshop/src/index.ts", "workshop", "mcp"];
+      const oc = {
+        $schema: "https://opencode.ai/config.json",
+        mcp: {
+          workshop: {
+            type: "local",
+            command,
+            enabled: true,
+            environment: {
+              // Workshop mcp server expects the bare daemon URL (no /v1/).
+              RAINDROP_WORKSHOP_URL: (resolvedLocalUrl ?? "http://localhost:5899").replace(/\/v1\/?$/, ""),
+              RAINDROP_WORKSHOP_AGENT_PROVIDER: "opencode",
+              RAINDROP_WORKSHOP_ANNOTATION_SOURCE: "opencode",
+            },
+          },
+        },
+      };
+      fs.writeFileSync(path.join(dir, "opencode.json"), JSON.stringify(oc, null, 2) + "\n", "utf8");
+      workshopConfigDir = dir;
+      appLog("info", `sidepanel bootstrap: OPENCODE_CONFIG_DIR=${dir}`);
+    } catch (err) {
+      appLog("warn", `sidepanel bootstrap failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  if (sidepanelMode && workshopConfigDir) {
+    try { process.env.OPENCODE_CONFIG_DIR = workshopConfigDir; } catch {}
+  }
+  const hooks = createHooks(config, worktree, input.directory, eventShipper, traceShipper, resolvedLocalUrl, sidepanelMode);
   return hooks;
 }
