@@ -58,7 +58,7 @@ Key fixes discovered during live verification:
 - [x] Plumb `resolvedLocalUrl` + `sidepanelMode` into `createHooks`
 - [x] `node --check` both bundles
 - [x] Live UI smoke: sidepanel chat invokes `workshop__get_current_run` end-to-end
-- [ ] Commit + push F-006 (Workshop fork side committed first; plugin side waits for that)
+- [x] Commit + push F-006 (commit `68bd80c`)
 
 ### F-005 — `RAINDROP_LOCAL_WORKSHOP_URL` env-var precedence fix (fall back to file if env value is non-local)
 
@@ -257,6 +257,32 @@ Three independent paths now populate the attribute: task-args description (fixed
 ---
 
 ## Closed Features
+
+### F-006 — Workshop sidepanel bootstrap (register `workshop` MCP server + inject sidepanel system prompt) — Closed 2026-09-08
+
+**Context:** The Workshop sidepanel chat (`POST /api/agent/messages`) spawns `opencode run`. Upstream claude/codex bridges used `--mcp-config <json>` + `--append-system-prompt`; `opencode run` has neither. We need the same effect via plugin hooks.
+
+**Closed 2026-09-08** (commit `68bd80c`, version bumped to `v0.1.0-kolya.15`).
+
+**Result (plugin-side):**
+- Both bundles (ESM + CJS) patched in lockstep.
+- When `RAINDROP_SIDEPANEL_ACTIVE=1` and the plugin detects a local Workshop daemon (`hasLocalDestination = true`), the plugin enters **sidepanel mode**:
+  1. Writes `~/.cache/workshop-sidepanel/<pid>-<ts>/opencode.json` with the stdio `workshop` MCP server registration (Workshop mcp server, env `RAINDROP_WORKSHOP_URL`/`_AGENT_PROVIDER`/`_ANNOTATION_SOURCE`). Stale entries (mtime > 1h) are swept. Strips `/v1/` suffix from `RAINDROP_WORKSHOP_URL`.
+  2. Exports `OPENCODE_CONFIG_DIR=<dir>` to that tmpdir so the opencode run child picks up the MCP registration (child does not inherit parent `process.env` mutations after execve).
+  3. `experimental.chat.system.transform` prepends a sidepanel role + MCP-tool block to the LLM system prompt, including the focused `run_id` from `RAINDROP_SIDEPANEL_RUN_ID`.
+- Non-sidepanel sessions are completely unaffected (gate is the env flag).
+- Errors are rate-limited and silent — bootstrap is best-effort, the existing tracing path must not be broken.
+- `node --check` passes for both bundles.
+
+**Key fixes discovered during live verification:**
+- `OPENCODE_CONFIG_DIR` is read at config-load time; `process.env` mutations in the parent plugin do NOT propagate to the child opencode run after execve. Workshop bridge (companion change in `opencode-workshop` repo) now also writes the config dir and exports it via spawn env.
+- `McpLocalConfig.command` is `[exe, ...args]` as a single array — `args` is NOT a separate field.
+- `RAINDROP_WORKSHOP_URL` must NOT have `/v1/` suffix (workshop mcp stdio server expects bare daemon URL).
+- Plugin's `eventShipper`/`traceShipper` must come AFTER `worktree` + `gitContext` declaration (TDZ fix).
+
+**Verified live (2026-09-08) in Workshop runs `7397d2b0` and `63e0c532`:**
+- Sending a sidepanel message registers `workshop` MCP server in opencode run.
+- Agent invokes `workshop__get_current_run` first, receives full run data + metadata, replies with the focused run_id and trace context.
 
 ### F-001 — Fix `tool.execute.after: result.output is required` for MCP tools
 
